@@ -124,4 +124,3 @@ def load_pdf_manuals() -> list[dict[str, Any]]:
             }
         )
     return documents
-
