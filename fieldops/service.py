@@ -50,13 +50,23 @@ def _extract(result: dict[str, Any]) -> tuple[str, list[Citation], list[ToolTrac
     citations: list[Citation] = []
     traces: list[ToolTrace] = []
     draft: WorkOrderDraft | None = None
+    call_args: dict[str, dict[str, Any]] = {}
+
+    for message in messages:
+        if isinstance(message, AIMessage):
+            for call in message.tool_calls:
+                call_args[call.get("id", "")] = call.get("args", {})
 
     for message in messages:
         if not isinstance(message, ToolMessage):
             continue
         payload = _payload(message)
         traces.append(
-            ToolTrace(name=message.name or "unknown", args={}, result=payload)
+            ToolTrace(
+                name=message.name or "unknown",
+                args=call_args.get(message.tool_call_id or "", {}),
+                result=payload,
+            )
         )
         if message.name == "search_knowledge":
             for item in payload.get("results", []):

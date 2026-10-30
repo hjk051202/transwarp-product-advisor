@@ -210,6 +210,7 @@ fieldops-copilot/
 │  ├─ test_rag.py
 │  ├─ test_tools.py
 │  ├─ test_service.py
+│  ├─ test_mcp.py
 │  └─ test_api.py
 ├─ requirements.txt
 ├─ run.ps1
