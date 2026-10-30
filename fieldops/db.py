@@ -72,6 +72,7 @@ def create_draft(
     scheduled_at: str | None,
     db_path: Path | str = DB_PATH,
 ) -> dict[str, Any]:
+    init_db(db_path)
     now = datetime.now(timezone.utc).isoformat()
     with connect(db_path) as conn:
         conn.execute(
