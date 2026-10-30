@@ -8,10 +8,11 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from fieldops import audit
 from fieldops.agent import get_agent
 from fieldops.data import get_device, get_part, get_telemetry as load_telemetry
 from fieldops.db import create_draft, get_draft, list_drafts
-from fieldops.mcp_client import create_work_order_via_mcp
+from fieldops.integrations import build_cmms_adapter
 from fieldops.rag import search
 from fieldops.schemas import (
     ApproveResponse,
@@ -157,38 +158,67 @@ def _fallback_diagnosis(message: str, serial: str) -> ChatResponse:
 async def chat(message: str, serial: str | None = None) -> ChatResponse:
     serial = (serial or "8F2-1042").strip().upper()
     prompt = f"{message}\n\n设备序列号：{serial}"
+    error = ""
     try:
         agent, mode = await get_agent()
         result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
         answer, citations, traces, draft = _extract(result)
         if not answer:
-            return _fallback_diagnosis(message, serial)
-        return ChatResponse(
-            answer=answer,
-            citations=citations,
-            tool_trace=traces,
-            draft=draft,
-            mode=mode,
-        )
-    except Exception:
-        return _fallback_diagnosis(message, serial)
+            response = _fallback_diagnosis(message, serial)
+        else:
+            response = ChatResponse(
+                answer=answer,
+                citations=citations,
+                tool_trace=traces,
+                draft=draft,
+                mode=mode,
+            )
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        response = _fallback_diagnosis(message, serial)
+
+    audit.log(
+        "chat.request",
+        resource=f"asset:{serial}",
+        detail={
+            "message": message[:160],
+            "mode": response.mode,
+            "citations": len(response.citations),
+            "tools": [trace.name for trace in response.tool_trace],
+            "draft_id": response.draft.draft_id if response.draft else None,
+            "error": error,
+        },
+    )
+    return response
 
 
 async def approve(draft_id: str) -> ApproveResponse:
     draft = get_draft(draft_id)
     if not draft:
+        audit.log("work_order.approve", resource=draft_id, detail={"status": "not_found"})
         raise ValueError(f"draft {draft_id} not found")
     if draft.get("status") == "approved" and draft.get("work_order_id"):
+        audit.log(
+            "work_order.approve",
+            resource=draft_id,
+            detail={"status": "already_approved", "work_order_id": draft["work_order_id"]},
+        )
         return ApproveResponse(
             draft_id=draft_id,
             work_order_id=draft["work_order_id"],
             status="approved",
         )
 
-    result = await create_work_order_via_mcp(draft)
+    result = await build_cmms_adapter().create_work_order(draft)
     work_order_id = result.get("work_order_id")
     if not work_order_id:
+        audit.log("work_order.approve", resource=draft_id, detail={"status": "failed"})
         raise ValueError("MCP did not return a work_order_id")
+    audit.log(
+        "work_order.approve",
+        resource=draft_id,
+        detail={"status": result.get("status"), "work_order_id": work_order_id},
+    )
     return ApproveResponse(
         draft_id=draft_id,
         work_order_id=work_order_id,

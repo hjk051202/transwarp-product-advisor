@@ -20,7 +20,11 @@ from mcp.server.fastmcp import FastMCP
 
 from fieldops.db import approve_draft, create_draft, get_by_work_order_id, get_draft, init_db
 
-mcp = FastMCP("cmms", host="127.0.0.1", port=8765)
+mcp = FastMCP(
+    "cmms",
+    host=os.getenv("MCP_HOST", "127.0.0.1"),
+    port=int(os.getenv("MCP_PORT", "8765")),
+)
 
 
 @mcp.tool()

@@ -10,6 +10,8 @@ chromadb==1.5.9
 mcp==1.30.0
 pydantic==2.14.1
 httpx==0.28.1
+pypdf==6.21.4
+reportlab==5.1.0
 streamlit==1.66.1
 pytest==9.2.0
 pytest-asyncio==1.4.1

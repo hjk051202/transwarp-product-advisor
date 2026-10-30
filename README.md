@@ -4,37 +4,39 @@
 
 > 用户报修后，助手检索维修手册、读取实时工况、判断保修/备件，生成一份**待人工确认**的工单草稿；工程师批准后，通过 `cmms-mcp` 写入 CMMS。
 
-![status](https://img.shields.io/badge/status-v0.2%20working%20demo-brightgreen)
+![status](https://img.shields.io/badge/status-v1.0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.12-blue)
 ![langchain](https://img.shields.io/badge/langchain-1.4-1c3d5a)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## 当前状态
+## v1.0 状态
 
-**v0.2：可本地运行的端到端 Demo。**
+**v1.0 是一个功能完整的本地 Demo，不是生产认证版本。**
 
-已经实现：
+已实现：
 
-- **RAG**：6 份示例手册/公告/SOP/历史工单，Chroma 向量检索 + 关键词重排 + 页码引用
-- **Tool Calling**：5 个原生 LangChain tools
-  - `search_knowledge`
-  - `get_telemetry`
-  - `check_warranty`
-  - `check_parts`
-  - `draft_work_order`
-- **LangChain Agent**：`create_agent` 统一调度 RAG、原生工具和 MCP 工具
-- **MCP**：`cmms-mcp` 暴露 `create_work_order` / `get_work_order`，通过 Streamable HTTP 接入
-- **HITL**：Agent 只生成 draft；工程师在 Streamlit 里批准后才写 CMMS
-- **FastAPI**：`/chat`、`/work-orders`、`/work-orders/{id}/approve`、`/health`
-- **Streamlit**：对话诊断、引用来源、工具轨迹、工单草稿、技术栈说明
-- **测试**：9 个 pytest 用例通过
-- **评测**：15 条手册检索问题，Recall@4 = 15/15（仅 6 篇文档，小样本，见下方说明）
+- **RAG**：9 份知识文档（6 Markdown + 3 PDF），Chroma 检索 + 关键词重排 + 页码引用
+- **Tool Calling**：5 个 LangChain 原生工具
+- **LangChain Agent**：`create_agent` 统一调度 RAG、原生工具、MCP 工具
+- **MCP**：`cmms-mcp` 暴露 `create_work_order` / `get_work_order`，Streamable HTTP 接入
+- **HITL**：Agent 只生成 draft；工程师批准后才写 CMMS
+- **FastAPI**：`/chat`、`/work-orders`、`/work-orders/{id}/approve`、`/audit`、`/health`
+- **API Key 鉴权**：配置 `FIELDOPS_API_KEY` 后保护业务接口
+- **审计日志**：每次对话、审批都会记录 request_id、actor、action、resource、detail
+- **适配层**：CMMS 支持 `mcp / http / local`，ERP 支持 `json / http`
+- **Streamlit**：对话诊断、引用来源、工具轨迹、工单审批、技术栈说明
+- **Docker Compose**：mcp + api + ui 三个服务
+- **CI**：GitHub Actions 跑测试和两个评测脚本
+- **测试**：15 个 pytest 用例通过
+- **评测**：
+  - RAG 检索：15 条问题，Recall@4 = 15/15
+  - 端到端：20 条问题，citation/answer/draft 均 20/20，p50 = 35ms
 
 > 没有模型 API Key 时，项目使用 `MockToolCallingModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
 >
-> 真实模型路径已实现，但当前开发环境没有 API Key，未做真实模型端到端验证；下面的测试与指标均来自离线 mock 路径。
+> 真实模型路径已实现，但当前开发环境没有 API Key，未做真实模型端到端验证；评测数字来自离线 mock 路径。Docker 文件已做 YAML 校验，但当前环境没有 Docker，未做容器运行时验证。
 
 ---
 
@@ -55,6 +57,7 @@
 | **Tool Calling** | 设备当前温度、转速、保修、库存不在文档里 | 3 个查询工具 + 1 个草稿工具 + 1 个知识检索工具 |
 | **MCP** | CMMS 是外部系统，建单要认证、审计、复用 | `cmms-mcp` 暴露建单/查单；Streamable HTTP 接入 |
 | **HITL** | 建单、订备件有真实成本，误操作代价高 | Agent 只出 draft，工程师批准后才写 CMMS |
+| **审计** | 出问题要能追溯“谁在什么时候让 Agent 做了什么” | request_id + actor + action + resource + detail |
 
 一句话：
 
@@ -65,43 +68,44 @@
 ## 架构
 
 ```text
-┌──────────────────────────────┐
-│ Streamlit UI                 │
-│ 对话 / 引用 / 工具轨迹 / 审批 │
-└──────────────┬───────────────┘
-               │ HTTP
-┌──────────────▼───────────────┐
-│ FastAPI                      │
-│ /chat /work-orders /approve  │
-└──────────────┬───────────────┘
-               │
-┌──────────────▼───────────────┐
-│ LangChain create_agent       │
-│  MockToolCallingModel        │
-│  或 DeepSeek / OpenAI        │
-└───┬──────────┬──────────┬────┘
-    │          │          │
-┌───▼────┐ ┌───▼─────┐ ┌──▼─────────────┐
-│ Chroma │ │ Native  │ │ MCP Client     │
-│ RAG    │ │ Tools   │ │ Streamable HTTP│
-└────────┘ └─────────┘ └──┬─────────────┘
-                          │
-                   ┌──────▼──────┐
-                   │ cmms-mcp    │
-                   │ create/get  │
-                   └──────┬──────┘
-                          │
-                   ┌──────▼──────┐
-                   │ SQLite      │
-                   │ work_orders │
-                   └─────────────┘
+┌────────────────────────────────────┐
+│ Streamlit UI                       │
+│ 对话 / 引用 / 工具轨迹 / 工单审批    │
+└───────────────┬────────────────────┘
+                │ HTTP + X-API-Key
+┌───────────────▼────────────────────┐
+│ FastAPI                            │
+│ auth middleware / request_id       │
+│ /chat /work-orders /audit /health  │
+└───────────────┬────────────────────┘
+                │
+┌───────────────▼────────────────────┐
+│ LangChain create_agent             │
+│ MockToolCallingModel / DeepSeek    │
+└───┬──────────────┬─────────────┬───┘
+    │              │             │
+┌───▼────┐   ┌─────▼──────┐  ┌───▼─────────────┐
+│ Chroma │   │ ERPAdapter │  │ CMMSAdapter     │
+│ RAG    │   │ json/http  │  │ mcp/http/local  │
+└────────┘   └─────┬──────┘  └───┬─────────────┘
+                   │             │
+             ┌─────▼─────┐  ┌────▼──────────┐
+             │ devices   │  │ cmms-mcp      │
+             │ parts     │  │ create/get    │
+             │ telemetry │  └────┬──────────┘
+             └───────────┘       │
+                            ┌────▼──────┐
+                            │ SQLite    │
+                            │ audit +   │
+                            │ workorders│
+                            └───────────┘
 ```
 
 ---
 
 ## 快速开始
 
-### 1. 安装依赖
+### 方式一：本地运行
 
 ```bash
 python -m venv .venv
@@ -110,26 +114,20 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 2. 启动 MCP Server
+启动 MCP Server：
 
 ```powershell
 $env:MCP_TRANSPORT = "streamable-http"
 python -m mcp_server.cmms_server
 ```
 
-启动后监听 `http://127.0.0.1:8765/mcp`。
-
-### 3. 启动 FastAPI
-
-另开一个终端：
+启动 FastAPI：
 
 ```bash
 uvicorn fieldops.main:app --host 127.0.0.1 --port 8000
 ```
 
-### 4. 启动 Streamlit
-
-再开一个终端：
+启动 UI：
 
 ```bash
 streamlit run app.py
@@ -137,85 +135,103 @@ streamlit run app.py
 
 打开 <http://127.0.0.1:8501>。
 
-### 或者：Windows 一键启动
+或者 Windows 一键：
 
 ```powershell
 .\run.ps1
 ```
 
-脚本会创建 `.venv`（如果不存在）、启动 MCP、启动 API、再启动 Streamlit。
+### 方式二：Docker Compose
 
-### 5. 演示步骤
+```powershell
+$env:FIELDOPS_API_KEY = "change-me"
+docker compose up --build
+```
 
-1. 在对话框输入：
+- UI：<http://127.0.0.1:8501>
+- API：<http://127.0.0.1:8000/docs>
+- MCP：<http://127.0.0.1:8765/mcp>
+
+三个服务：
+
+| 服务 | 作用 |
+|---|---|
+| `mcp` | `cmms-mcp`，Streamable HTTP |
+| `api` | FastAPI + LangChain Agent |
+| `ui` | Streamlit 前端 |
+
+### 演示步骤
+
+输入：
 
 ```text
 X100 报 E-204，出水温度高，客户已停机。
 ```
 
-2. 查看诊断、实时工况、保修、备件和 4 条引用来源
-3. 打开左侧 **工单草稿**，核对后点击 **批准并创建工单**
+然后：
+
+1. 查看诊断、工况、保修、备件和引用
+2. 左侧切到 **工单草稿**
+3. 审核后点击 **批准并创建工单**
 4. 工单通过 `cmms-mcp.create_work_order` 写入 SQLite，返回 `WO-...`
-5. 打开左侧 **技术栈**，查看每项技术解决的实际问题
+5. 左侧 **技术栈** 查看每项技术解决的实际问题
 
 ---
 
-## API
+## 配置
+
+| 环境变量 | 默认值 | 作用 |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | 空 | 使用 DeepSeek 真实模型 |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | 模型名 |
+| `OPENAI_API_KEY` | 空 | 使用 OpenAI 真实模型 |
+| `FIELDOPS_API_KEY` | 空 | 设置后启用 API Key 鉴权 |
+| `CMMS_MCP_URL` | `http://127.0.0.1:8765/mcp` | MCP 地址 |
+| `CMMS_ADAPTER` | `mcp` | `mcp` / `http` / `local` |
+| `CMMS_HTTP_URL` | `http://127.0.0.1:9000` | 真实 CMMS REST 地址 |
+| `ERP_ADAPTER` | `json` | `json` / `http` |
+| `ERP_HTTP_URL` | `http://127.0.0.1:9100` | 真实 ERP/IoT 地址 |
+| `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8765` | MCP 监听地址 |
+
+真实模型：
+
+```powershell
+$env:DEEPSEEK_API_KEY = "sk-..."
+uvicorn fieldops.main:app --port 8000
+```
+
+---
+
+## API 与鉴权
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| `GET` | `/health` | 模式、MCP 工具、服务状态 |
+| `GET` | `/health` | 模式、MCP 工具、鉴权状态 |
 | `POST` | `/chat` | 诊断对话，返回 answer / citations / tool_trace / draft |
 | `GET` | `/work-orders` | 最近的工单草稿 |
 | `GET` | `/work-orders/{draft_id}` | 查询工单草稿 |
-| `POST` | `/work-orders/{draft_id}/approve` | 人工批准后通过 MCP 建单 |
+| `POST` | `/work-orders/{draft_id}/approve` | 人工批准后通过 CMMS 适配器建单 |
+| `GET` | `/audit` | 最近审计日志 |
+
+启用鉴权后，除 `/health`、`/docs`、`/openapi.json` 外都需要：
+
+```http
+X-API-Key: change-me
+```
+
+或：
+
+```http
+Authorization: Bearer change-me
+```
 
 示例：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: change-me" \
   -d '{"message":"X100 报 E-204，出水温度高","serial":"8F2-1042"}'
-```
-
----
-
-## 项目结构
-
-```text
-fieldops-copilot/
-├─ app.py                    # Streamlit UI（HTTP 调后端）
-├─ fieldops/
-│  ├─ main.py                # FastAPI 入口
-│  ├─ agent.py               # create_agent + 模型选择
-│  ├─ mock_llm.py            # 无 API Key 时的确定性工具调用模型
-│  ├─ rag.py                 # Chroma + HashingEmbeddings + 引用
-│  ├─ tools.py               # 5 个原生工具
-│  ├─ mcp_client.py          # langchain-mcp-adapters
-│  ├─ service.py             # 对话编排 / 审批
-│  ├─ db.py                  # SQLite
-│  ├─ data.py                # JSON 数据访问
-│  └─ schemas.py             # Pydantic
-├─ mcp_server/
-│  └─ cmms_server.py         # FastMCP：create/get work order
-├─ data/
-│  ├─ manuals/               # 6 份示例手册
-│  ├─ devices.json
-│  ├─ parts.json
-│  └─ telemetry.json
-├─ eval/
-│  ├─ questions.jsonl
-│  └─ run_eval.py
-├─ tests/
-│  ├─ test_rag.py
-│  ├─ test_tools.py
-│  ├─ test_service.py
-│  ├─ test_mcp.py
-│  └─ test_api.py
-├─ requirements.txt
-├─ run.ps1
-├─ pytest.ini
-└─ README.md
 ```
 
 ---
@@ -228,14 +244,30 @@ fieldops-copilot/
 python eval/run_eval.py
 ```
 
-当前结果：
+当前：
 
 ```text
 Recall@4 (doc)  = 15/15 = 100.00%
 Page hit@4      = 15/15 = 100.00%
 ```
 
-**说明**：语料只有 6 篇文档、15 条问题，这个 100% 只能证明链路可用，不能说明泛化能力。下一阶段应扩充到 50+ 篇文档、50+ 条问题，并加入 hard negatives。
+### 端到端
+
+```bash
+python eval/run_e2e.py
+```
+
+当前：
+
+```text
+citation_hit@4  = 20/20 = 100.00%
+answer_keyword  = 20/20 = 100.00%
+draft_expect    = 20/20 = 100.00%
+p50 latency     = 35 ms
+p95 latency     = 90 ms
+```
+
+**说明**：这是 9 篇文档、20 条问题的**小型合成评测**，100% 只能证明链路可用，不能说明真实场景的泛化能力。面试时要主动说明语料规模和 mock 模型限制。
 
 ### 测试
 
@@ -243,35 +275,67 @@ Page hit@4      = 15/15 = 100.00%
 pytest -q
 ```
 
-当前：`9 passed`。
+当前：`15 passed`。
 
 ---
 
-## 模型配置
-
-默认离线模式，无需 API Key：
+## 项目结构
 
 ```text
-MockToolCallingModel -> 规则化选择工具 -> 仍由 LangChain create_agent 执行
+fieldops-copilot/
+├─ app.py                       # Streamlit UI（HTTP 调后端）
+├─ fieldops/
+│  ├─ main.py                   # FastAPI + auth middleware
+│  ├─ agent.py                  # create_agent + 模型选择
+│  ├─ mock_llm.py               # 无 API Key 时的确定性工具调用
+│  ├─ rag.py                    # Chroma + 哈希 embedding + PDF/Markdown 索引
+│  ├─ ingest.py                 # 预留的批量入库入口
+│  ├─ tools.py                  # 5 个原生工具
+│  ├─ mcp_client.py             # langchain-mcp-adapters
+│  ├─ service.py                # 对话编排 / 审批 / 审计
+│  ├─ audit.py                  # request_id + audit log
+│  ├─ db.py                     # SQLite：work_orders + audit_log
+│  ├─ integrations/
+│  │  ├─ cmms.py                # mcp / http / local 适配器
+│  │  └─ erp.py                 # json / http 适配器
+│  ├─ data.py                   # Markdown + PDF 数据访问
+│  └─ schemas.py                # Pydantic
+├─ mcp_server/
+│  └─ cmms_server.py            # FastMCP：create/get work order
+├─ data/
+│  ├─ manuals/                  # 6 份 Markdown
+│  ├─ manuals/pdf/              # 3 份 PDF
+│  ├─ devices.json
+│  ├─ parts.json
+│  └─ telemetry.json
+├─ scripts/
+│  └─ generate_pdfs.py          # 生成演示 PDF
+├─ eval/
+│  ├─ questions.jsonl
+│  ├─ e2e_questions.jsonl
+│  ├─ run_eval.py
+│  └─ run_e2e.py
+├─ tests/                       # 15 个用例
+├─ Dockerfile
+├─ docker-compose.yml
+├─ .github/workflows/ci.yml
+├─ requirements.txt
+├─ run.ps1
+├─ pytest.ini
+└─ README.md
 ```
 
-使用真实模型：
+---
 
-```powershell
-$env:DEEPSEEK_API_KEY = "sk-..."
-# 可选
-$env:DEEPSEEK_MODEL = "deepseek-chat"
-$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-```
+## 安全与边界
 
-或：
-
-```powershell
-$env:OPENAI_API_KEY = "sk-..."
-$env:OPENAI_MODEL = "gpt-4o-mini"
-```
-
-重启 API 后生效。
+- 默认 `FIELDOPS_API_KEY` 为空时鉴权关闭，仅适合本地开发。
+- 生产环境应把 API Key 放在 Secret Manager，不要写进 compose 文件。
+- 审计日志会记录消息前 160 字；生产环境应做 PII 脱敏。
+- `HttpCMMSAdapter` / `HttpERPAdapter` 是适配器骨架，未对接真实 CMMS/ERP。
+- 当前 PDF 为 ASCII 示例，中文扫描件需要 OCR（PaddleOCR/Tesseract）。
+- Docker 文件未在当前环境运行验证。
+- 真实模型路径未验证；离线 mock 模型只覆盖预设场景。
 
 ---
 
@@ -280,28 +344,28 @@ $env:OPENAI_MODEL = "gpt-4o-mini"
 **设备售后运维助手｜LangChain + RAG + Tool Calling + MCP｜个人项目**
 
 - 基于 LangChain 1.x `create_agent` 构建设备售后诊断 Agent，统一调度 Chroma RAG、5 个业务工具和 1 个 MCP Server，完成从故障描述到工单草稿的闭环。
-- 设计面向设备手册/服务公告的 RAG 链路，按标题切分并保留型号、版本、页码元数据，在 15 条小样本评测集上 Recall@4 为 15/15，回答附带可追溯引用。
-- 将 CMMS 封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露建单/查单能力；写操作经 Streamlit 人工确认后执行，避免误建单。
-- 使用 FastAPI + Streamlit 实现前后端分离 Demo，支持对话诊断、引用来源、工具调用轨迹和工单审批，9 个 pytest 用例覆盖 RAG、工具、服务、MCP 与 API。
+- 设计 Markdown/PDF 混合知识入库链路，按标题切分并保留型号、版本、页码元数据；15 条检索评测 Recall@4 为 15/15，20 条端到端评测 citation/answer/draft 均 20/20。
+- 将 CMMS 封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露建单/查单；抽象 `mcp/http/local` 三种 CMMS 适配器，写操作经人工确认后执行。
+- 使用 FastAPI + Streamlit 实现前后端分离 Demo，加入 API Key 鉴权、request_id 审计日志、Docker Compose 与 GitHub Actions；15 个 pytest 用例覆盖 RAG、工具、MCP、鉴权、审计与适配器。
 
-> 指标请写你实测的数字；当前 15/15 是小样本，面试时主动说明语料规模，避免被追问时显得夸大。
+> 指标请写你实测的数字；当前评测是小样本合成集，面试时主动说明语料规模和 mock 模型限制。
 
 ---
 
 ## Roadmap
 
-- [x] v0.1：Streamlit 界面 + Mock 业务流程
-- [x] v0.2：Chroma RAG + 5 个 tools + LangChain Agent + `cmms-mcp` + FastAPI + Streamlit
-- [ ] v0.3：接入真实模型，补 50 条端到端评测
-- [ ] v0.4：PDF/OCR 解析，扩充到 50+ 份手册
-- [ ] v0.5：Docker Compose、鉴权、审计日志
-- [ ] v1.0：真实 CMMS / ERP 适配
+- [x] v0.1：Streamlit UI + Mock 业务流程
+- [x] v0.2：Chroma RAG + 5 个 tools + LangChain Agent + `cmms-mcp` + FastAPI
+- [x] v1.0：PDF 入库 + 20 条端到端评测 + 鉴权/审计 + 适配层 + Docker + CI
+- [ ] v1.1：真实模型端到端评测
+- [ ] v1.2：中文 PDF/OCR + 50+ 份真实风格手册
+- [ ] v1.3：真实 CMMS/ERP 对接、SSO、可观测性
 
 ---
 
 ## 数据说明
 
-所有设备、故障码、工单、库存均为**虚构演示数据**，不对应任何真实厂商或客户。
+所有设备、故障码、工单、库存均为**虚构演示数据**，不对应任何真实厂商或客户。PDF 为脚本生成的 ASCII 示例，仅用于验证入库链路。
 
 ---
 

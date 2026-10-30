@@ -8,8 +8,8 @@ from uuid import uuid4
 
 from langchain_core.tools import tool
 
-from fieldops.data import get_device, get_part, get_telemetry as load_telemetry
 from fieldops.db import create_draft, init_db
+from fieldops.integrations import build_erp_adapter
 from fieldops.rag import search_json
 
 DEFAULT_SAFETY = [
@@ -34,7 +34,7 @@ def get_telemetry(asset_id: str, minutes: int = 30) -> str:
         minutes: 查询最近多少分钟，默认 30。
     """
 
-    data = load_telemetry(asset_id, minutes)
+    data = build_erp_adapter().get_telemetry(asset_id, minutes)
     if not data:
         return _dumps({"error": f"未找到设备 {asset_id} 的遥测数据"})
     return _dumps(data)
@@ -50,7 +50,7 @@ def check_warranty(serial: str) -> str:
         serial: 设备序列号，例如 8F2-1042。
     """
 
-    device = get_device(serial)
+    device = build_erp_adapter().get_warranty(serial)
     if not device:
         return _dumps({"error": f"未找到设备 {serial}"})
     return _dumps(
@@ -75,21 +75,10 @@ def check_parts(part_no: str, region: str = "上海") -> str:
         region: 仓库区域，默认上海。
     """
 
-    part = get_part(part_no)
+    part = build_erp_adapter().get_part(part_no, region)
     if not part:
         return _dumps({"error": f"未找到备件 {part_no}"})
-    return _dumps(
-        {
-            "part_no": part["part_no"],
-            "name": part["name"],
-            "spec": part["spec"],
-            "region": region,
-            "stock": part["stock"].get(region, 0),
-            "all_stock": part["stock"],
-            "price_cny": part["price_cny"],
-            "warranty_covered": part["warranty_covered"],
-        }
-    )
+    return _dumps(part)
 
 
 @tool

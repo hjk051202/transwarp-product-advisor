@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -21,7 +22,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from fieldops.config import CHROMA_DIR
-from fieldops.data import load_manuals
+from fieldops.data import load_manuals, load_pdf_manuals
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-_.]*|[\u4e00-\u9fff]")
 
@@ -82,6 +83,15 @@ class RetrievedDoc:
         }
 
 
+def _all_manuals() -> list[dict[str, Any]]:
+    return [*load_manuals(), *load_pdf_manuals()]
+
+
+def _manifest() -> str:
+    ids = sorted(manual["id"] for manual in _all_manuals())
+    return hashlib.sha256(json.dumps(ids, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 def _make_chunks() -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=450,
@@ -89,7 +99,7 @@ def _make_chunks() -> list[Document]:
         separators=["\n## ", "\n### ", "\n\n", "\n", "。", "；", " "],
     )
     chunks: list[Document] = []
-    for manual in load_manuals():
+    for manual in _all_manuals():
         metadata = {
             key: value
             for key, value in manual["metadata"].items()
@@ -111,6 +121,12 @@ def _make_chunks() -> list[Document]:
 
 @lru_cache(maxsize=1)
 def get_vectorstore() -> Chroma:
+    manifest_path = CHROMA_DIR / "manifest.txt"
+    current_manifest = _manifest()
+    if not manifest_path.exists() or manifest_path.read_text(encoding="utf-8") != current_manifest:
+        shutil.rmtree(CHROMA_DIR, ignore_errors=True)
+    CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+
     store = Chroma(
         collection_name="fieldops_manuals",
         embedding_function=HashingEmbeddings(),
@@ -121,6 +137,7 @@ def get_vectorstore() -> Chroma:
         chunks = _make_chunks()
         ids = [f"{c.metadata['doc_id']}-{c.metadata['chunk_index']}" for c in chunks]
         store.add_documents(chunks, ids=ids)
+        manifest_path.write_text(current_manifest, encoding="utf-8")
     return store
 
 

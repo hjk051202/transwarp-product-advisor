@@ -1,0 +1,12 @@
+.venv
+.git
+.gitignore
+.chroma
+.uv-cache
+__pycache__
+*.pyc
+.pytest_cache
+pytest-cache-files-*
+data/*.db
+.deploy_key*
+.ssh_known_hosts

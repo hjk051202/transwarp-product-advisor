@@ -86,3 +86,42 @@ def load_manuals() -> list[dict[str, Any]]:
             }
         )
     return documents
+
+
+def load_pdf_manuals() -> list[dict[str, Any]]:
+    """Load PDF manuals from data/manuals/pdf.
+
+    The sample PDFs carry the same frontmatter block as the Markdown files, so
+    the metadata/page/citation contract is identical after extraction.
+    """
+
+    pdf_dir = MANUAL_DIR / "pdf"
+    if not pdf_dir.exists():
+        return []
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return []
+
+    documents: list[dict[str, Any]] = []
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        try:
+            reader = PdfReader(str(path))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception:
+            continue
+        metadata, body = parse_frontmatter(text)
+        metadata.setdefault("doc_id", f"pdf-{path.stem}")
+        metadata.setdefault("title", path.stem)
+        metadata.setdefault("model", "X100")
+        metadata.setdefault("doc_type", "pdf")
+        metadata["source_path"] = str(path.relative_to(DATA_DIR.parent))
+        documents.append(
+            {
+                "id": metadata["doc_id"],
+                "text": body,
+                "metadata": metadata,
+            }
+        )
+    return documents
+

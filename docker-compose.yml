@@ -1,0 +1,53 @@
+services:
+  mcp:
+    build: .
+    command: ["python", "-m", "mcp_server.cmms_server"]
+    environment:
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8765
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8765), 2); s.close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: ["uvicorn", "fieldops.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      CMMS_MCP_URL: http://mcp:8765/mcp
+      CMMS_ADAPTER: mcp
+      ERP_ADAPTER: json
+      FIELDOPS_API_KEY: ${FIELDOPS_API_KEY:-demo-key}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  ui:
+    build: .
+    command: ["streamlit", "run", "app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+    environment:
+      FIELDOPS_API_URL: http://api:8000
+      FIELDOPS_API_KEY: ${FIELDOPS_API_KEY:-demo-key}
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

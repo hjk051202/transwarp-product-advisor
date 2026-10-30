@@ -44,6 +44,19 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                action TEXT NOT NULL,
+                resource TEXT NOT NULL,
+                detail_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -130,6 +143,47 @@ def get_by_work_order_id(
             "SELECT * FROM work_orders WHERE work_order_id = ?", (work_order_id,)
         ).fetchone()
     return _row_to_dict(row)
+
+
+def log_audit(
+    *,
+    request_id: str,
+    actor: str,
+    action: str,
+    resource: str,
+    detail: dict[str, Any] | None = None,
+    db_path: Path | str = DB_PATH,
+) -> None:
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO audit_log
+            (request_id, actor, action, resource, detail_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                request_id,
+                actor,
+                action,
+                resource,
+                json.dumps(detail or {}, ensure_ascii=False),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+
+
+def list_audit(limit: int = 50, db_path: Path | str = DB_PATH) -> list[dict[str, Any]]:
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["detail"] = json.loads(item.pop("detail_json"))
+        result.append(item)
+    return result
 
 
 def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

@@ -16,6 +16,7 @@ import httpx
 import streamlit as st
 
 API_URL = os.getenv("FIELDOPS_API_URL", "http://127.0.0.1:8000")
+API_KEY = os.getenv("FIELDOPS_API_KEY", "")
 
 st.set_page_config(
     page_title="设备售后运维助手",
@@ -106,6 +107,8 @@ if "work_order" not in st.session_state:
     st.session_state.work_order = None
 if "api_url" not in st.session_state:
     st.session_state.api_url = API_URL
+if "api_key" not in st.session_state:
+    st.session_state.api_key = API_KEY
 
 
 @st.cache_data(ttl=5, show_spinner=False)
@@ -118,19 +121,23 @@ def fetch_health(url: str) -> dict[str, Any] | None:
         return None
 
 
-def post_chat(url: str, message: str, serial: str) -> dict[str, Any]:
+def post_chat(url: str, message: str, serial: str, key: str = "") -> dict[str, Any]:
+    headers = {"X-API-Key": key} if key else {}
     response = httpx.post(
         f"{url.rstrip('/')}/chat",
         json={"message": message, "serial": serial},
+        headers=headers,
         timeout=90,
     )
     response.raise_for_status()
     return response.json()
 
 
-def post_approve(url: str, draft_id: str) -> dict[str, Any]:
+def post_approve(url: str, draft_id: str, key: str = "") -> dict[str, Any]:
+    headers = {"X-API-Key": key} if key else {}
     response = httpx.post(
         f"{url.rstrip('/')}/work-orders/{draft_id}/approve",
+        headers=headers,
         timeout=60,
     )
     response.raise_for_status()
@@ -189,6 +196,11 @@ with st.sidebar:
     api_url_input = st.text_input("后端地址", value=st.session_state.api_url)
     if api_url_input != st.session_state.api_url:
         st.session_state.api_url = api_url_input
+    st.session_state.api_key = st.text_input(
+        "API Key（可选）",
+        value=st.session_state.api_key,
+        type="password",
+    )
     serial = st.text_input("设备序列号", value="8F2-1042")
     model = st.selectbox(
         "设备型号",
@@ -262,7 +274,12 @@ def render_chat() -> None:
         st.markdown(prompt)
 
     try:
-        data = post_chat(st.session_state.api_url, prompt, serial)
+        data = post_chat(
+            st.session_state.api_url,
+            prompt,
+            serial,
+            st.session_state.api_key,
+        )
     except Exception as exc:
         st.error(f"后端调用失败：{exc}")
         return
@@ -363,7 +380,9 @@ def render_order() -> None:
         try:
             with st.spinner("正在通过 cmms-mcp 创建工单..."):
                 result = post_approve(
-                    st.session_state.api_url, draft["draft_id"]
+                    st.session_state.api_url,
+                    draft["draft_id"],
+                    st.session_state.api_key,
                 )
             st.session_state.work_order = result
             st.rerun()

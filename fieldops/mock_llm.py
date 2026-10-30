@@ -112,6 +112,13 @@ class MockToolCallingModel(BaseChatModel):
                     f"单价 {parts.get('price_cny')} 元。"
                 )
             if results:
+                lines.append("\n**资料摘要**")
+                for item in results[:2]:
+                    page = f"p.{item['page']}" if item.get("page") else ""
+                    lines.append(
+                        f"> {item.get('snippet', '')[:260]}\n>\n"
+                        f"> — {item.get('title', '')} {item.get('section', '')} {page}"
+                    )
                 lines.append("\n**依据**")
                 for item in results[:4]:
                     page = f"p.{item['page']}" if item.get("page") else ""
@@ -134,9 +141,14 @@ class MockToolCallingModel(BaseChatModel):
             lines.append("根据手册，E-204 通常与冷却风扇、F3 保险或接插件有关。")
 
         lines.append("\n### 建议排查")
+        lines.append(
+            "手册给出的触发阈值是 **95°C**；当前 96°C 已超过阈值。"
+        )
         lines.append("1. 按手册 §7.3 执行 **LOTO 断电**，确认设备完全停机。")
         lines.append("2. 检查 **F3 保险**与风扇接插件 XF3；若 F3 熔断，更换 5A 保险并检查线束。")
-        lines.append("3. 若风扇卡死，更换风扇组件 **FAN-12038**。")
+        lines.append("3. 若接插件氧化，按 SB-2025-11 更换改进型线束 **HARN-XF3-02**。")
+        lines.append("4. 若风扇卡死，更换风扇组件 **FAN-12038**。")
+        lines.append("安全提示：**禁止带电**插拔风扇接插件，更换前确认叶轮停止。")
 
         if warranty:
             lines.append("\n### 保修")
@@ -180,8 +192,30 @@ class MockToolCallingModel(BaseChatModel):
         tool_messages = self._tool_messages(messages)
         done = {message.name for message in tool_messages}
         serial = _extract_serial(query)
-        lower = query.lower()
-        is_e204 = any(key in query for key in ["E-204", "e-204", "高温", "风扇", "停机"])
+        fault_match = re.search(r"E-\d{3}", query, re.I)
+        is_fault = bool(fault_match)
+        is_e204 = is_fault and fault_match.group(0).upper() == "E-204" or any(
+            key in query for key in ["高温", "风扇", "停机"]
+        )
+        wants_knowledge = is_fault or any(
+            key in query
+            for key in [
+                "手册",
+                "步骤",
+                "故障",
+                "批次",
+                "工单",
+                "复位",
+                "代码",
+                "含义",
+                "安全",
+                "更换",
+                "规格",
+                "线束",
+                "SB-",
+                "是什么",
+            ]
+        )
 
         # First turn: pick the tools that the scenario needs.
         if not tool_messages:
@@ -196,7 +230,7 @@ class MockToolCallingModel(BaseChatModel):
                 )
                 if call:
                     calls.append(call)
-            if is_e204 or "手册" in query or "步骤" in query or "故障" in query:
+            if wants_knowledge or is_e204:
                 call = self._call(
                     "search_knowledge",
                     {"query": query[:300]},
@@ -230,21 +264,29 @@ class MockToolCallingModel(BaseChatModel):
                 ]
             )
 
-        # After diagnosis tools, create one draft (only once).
+        # After diagnosis tools, create one draft for a fault (only once).
         draft: dict[str, Any] = {}
-        if "draft_work_order" not in done and is_e204:
+        if "draft_work_order" not in done and is_fault:
+            if is_e204:
+                title = "E-204 高温保护 / 冷却风扇异常"
+                description = (
+                    "出水温度 96°C，风扇转速 0 rpm，控制指令 100%。"
+                    "按手册 §7.3 检查 F3 保险与风扇接插件 XF3；"
+                    "必要时更换风扇组件 FAN-12038。"
+                )
+                parts = ["FAN-12038", "FUSE-5A"]
+            else:
+                title = f"{fault_match.group(0).upper()} 故障诊断"
+                description = query[:300]
+                parts = []
             call = self._call(
                 "draft_work_order",
                 {
                     "asset_id": serial,
-                    "title": "E-204 高温保护 / 冷却风扇异常",
-                    "description": (
-                        "出水温度 96°C，风扇转速 0 rpm，控制指令 100%。"
-                        "按手册 §7.3 检查 F3 保险与风扇接插件 XF3；"
-                        "必要时更换风扇组件 FAN-12038。"
-                    ),
+                    "title": title,
+                    "description": description,
                     "priority": "P2",
-                    "parts": ["FAN-12038", "FUSE-5A"],
+                    "parts": parts,
                     "scheduled_at": "2026-10-31 10:00",
                 },
             )
