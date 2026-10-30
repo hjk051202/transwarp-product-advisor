@@ -6,7 +6,12 @@ venv/
 .env.*
 .streamlit/secrets.toml
 .pytest_cache/
+pytest-cache-files-*/
 .ruff_cache/
+.uv-cache/
+.chroma/
+data/*.db
+data/*.sqlite3
 .DS_Store
 Thumbs.db
 .deploy_key*

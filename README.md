@@ -2,34 +2,39 @@
 
 一个面向工业设备售后场景的 **LangChain + RAG + Tool Calling + MCP** 简历项目。
 
-> 用户报修后，助手查设备档案、检索维修手册、读取实时工况、判断保修/备件，最后生成一份**待人工确认**的工单草稿。
+> 用户报修后，助手检索维修手册、读取实时工况、判断保修/备件，生成一份**待人工确认**的工单草稿；工程师批准后，通过 `cmms-mcp` 写入 CMMS。
 
-![status](https://img.shields.io/badge/status-v0.1%20UI%20demo-orange)
-![python](https://img.shields.io/badge/python-3.10%2B-blue)
+![status](https://img.shields.io/badge/status-v0.2%20working%20demo-brightgreen)
+![python](https://img.shields.io/badge/python-3.12-blue)
+![langchain](https://img.shields.io/badge/langchain-1.4-1c3d5a)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
 ## 当前状态
 
-**v0.1：可运行的界面演示版（Mock 数据）。**
+**v0.2：可本地运行的端到端 Demo。**
 
 已经实现：
 
-- Streamlit 对话界面
-- E-204 高温故障的完整演示流程
-- 工单草稿、人工确认、模拟建单
-- “技术栈”页面：说明每项技术解决的实际问题
+- **RAG**：6 份示例手册/公告/SOP/历史工单，Chroma 向量检索 + 关键词重排 + 页码引用
+- **Tool Calling**：5 个原生 LangChain tools
+  - `search_knowledge`
+  - `get_telemetry`
+  - `check_warranty`
+  - `check_parts`
+  - `draft_work_order`
+- **LangChain Agent**：`create_agent` 统一调度 RAG、原生工具和 MCP 工具
+- **MCP**：`cmms-mcp` 暴露 `create_work_order` / `get_work_order`，通过 Streamable HTTP 接入
+- **HITL**：Agent 只生成 draft；工程师在 Streamlit 里批准后才写 CMMS
+- **FastAPI**：`/chat`、`/work-orders`、`/work-orders/{id}/approve`、`/health`
+- **Streamlit**：对话诊断、引用来源、工具轨迹、工单草稿、技术栈说明
+- **测试**：9 个 pytest 用例通过
+- **评测**：15 条手册检索问题，Recall@4 = 15/15（仅 6 篇文档，小样本，见下方说明）
 
-规划中（按 Roadmap 逐步接入）：
-
-- LangChain Agent
-- Chroma RAG + 页码引用
-- 3 个 Native Tools（遥测/保修/备件）
-- 1 个 `cmms-mcp` Server
-- 50 条评测集
-
-> 仓库不会把“规划中”写成“已完成”。当前版本就是 UI 原型，方便先看交互和业务闭环。
+> 没有模型 API Key 时，项目使用 `MockToolCallingModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
+>
+> 真实模型路径已实现，但当前开发环境没有 API Key，未做真实模型端到端验证；下面的测试与指标均来自离线 mock 路径。
 
 ---
 
@@ -46,9 +51,9 @@
 | 技术 | 解决的实际问题 | 项目里的实现 |
 |---|---|---|
 | **LangChain** | 故障处理是多步流程，if/else 会越写越乱 | `create_agent` 统一调度 RAG、业务工具、MCP 工具 |
-| **RAG** | 手册长、版本多，模型直接答会编造故障码 | 按标题切分 + 型号/版本/页码元数据 + Chroma 检索 + 引用 |
-| **Tool Calling** | 设备当前温度、转速、保修、库存不在文档里 | `get_telemetry` / `check_warranty` / `check_parts` |
-| **MCP** | CMMS 是外部系统，建单要认证、审计、复用 | `cmms-mcp` 暴露 `create_work_order` / `get_work_order` |
+| **RAG** | 手册长、版本多，模型直接答会编造故障码 | Chroma 检索 + 型号/版本/页码元数据 + 引用 |
+| **Tool Calling** | 设备当前温度、转速、保修、库存不在文档里 | 3 个查询工具 + 1 个草稿工具 + 1 个知识检索工具 |
+| **MCP** | CMMS 是外部系统，建单要认证、审计、复用 | `cmms-mcp` 暴露建单/查单；Streamable HTTP 接入 |
 | **HITL** | 建单、订备件有真实成本，误操作代价高 | Agent 只出 draft，工程师批准后才写 CMMS |
 
 一句话：
@@ -57,37 +62,121 @@
 
 ---
 
-## 本地运行
+## 架构
 
-### 方式一：直接运行
+```text
+┌──────────────────────────────┐
+│ Streamlit UI                 │
+│ 对话 / 引用 / 工具轨迹 / 审批 │
+└──────────────┬───────────────┘
+               │ HTTP
+┌──────────────▼───────────────┐
+│ FastAPI                      │
+│ /chat /work-orders /approve  │
+└──────────────┬───────────────┘
+               │
+┌──────────────▼───────────────┐
+│ LangChain create_agent       │
+│  MockToolCallingModel        │
+│  或 DeepSeek / OpenAI        │
+└───┬──────────┬──────────┬────┘
+    │          │          │
+┌───▼────┐ ┌───▼─────┐ ┌──▼─────────────┐
+│ Chroma │ │ Native  │ │ MCP Client     │
+│ RAG    │ │ Tools   │ │ Streamable HTTP│
+└────────┘ └─────────┘ └──┬─────────────┘
+                          │
+                   ┌──────▼──────┐
+                   │ cmms-mcp    │
+                   │ create/get  │
+                   └──────┬──────┘
+                          │
+                   ┌──────▼──────┐
+                   │ SQLite      │
+                   │ work_orders │
+                   └─────────────┘
+```
+
+---
+
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS / Linux
 pip install -r requirements.txt
+```
+
+### 2. 启动 MCP Server
+
+```powershell
+$env:MCP_TRANSPORT = "streamable-http"
+python -m mcp_server.cmms_server
+```
+
+启动后监听 `http://127.0.0.1:8765/mcp`。
+
+### 3. 启动 FastAPI
+
+另开一个终端：
+
+```bash
+uvicorn fieldops.main:app --host 127.0.0.1 --port 8000
+```
+
+### 4. 启动 Streamlit
+
+再开一个终端：
+
+```bash
 streamlit run app.py
 ```
 
 打开 <http://127.0.0.1:8501>。
 
-### 方式二：Windows 一键脚本
+### 或者：Windows 一键启动
 
 ```powershell
 .\run.ps1
 ```
 
-脚本会创建 `.venv`、安装依赖并启动 Streamlit。
+脚本会创建 `.venv`（如果不存在）、启动 MCP、启动 API、再启动 Streamlit。
 
-### 演示步骤
+### 5. 演示步骤
 
-1. 打开页面，确认标题为 **设备售后运维助手**
-2. 在对话框输入：
+1. 在对话框输入：
 
 ```text
 X100 报 E-204，出水温度高，客户已停机。
 ```
 
-3. 查看诊断、实时工况、手册引用、备件和保修
-4. 打开左侧 **工单草稿**，勾选确认，点击 **批准并创建工单**
-5. 打开左侧 **技术栈**，查看“技术 → 实际问题 → 实现”的对应关系
+2. 查看诊断、实时工况、保修、备件和 4 条引用来源
+3. 打开左侧 **工单草稿**，核对后点击 **批准并创建工单**
+4. 工单通过 `cmms-mcp.create_work_order` 写入 SQLite，返回 `WO-...`
+5. 打开左侧 **技术栈**，查看每项技术解决的实际问题
+
+---
+
+## API
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| `GET` | `/health` | 模式、MCP 工具、服务状态 |
+| `POST` | `/chat` | 诊断对话，返回 answer / citations / tool_trace / draft |
+| `GET` | `/work-orders` | 最近的工单草稿 |
+| `GET` | `/work-orders/{draft_id}` | 查询工单草稿 |
+| `POST` | `/work-orders/{draft_id}/approve` | 人工批准后通过 MCP 建单 |
+
+示例：
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"X100 报 E-204，出水温度高","serial":"8F2-1042"}'
+```
 
 ---
 
@@ -95,40 +184,93 @@ X100 报 E-204，出水温度高，客户已停机。
 
 ```text
 fieldops-copilot/
-├─ app.py              # Streamlit 演示界面（当前版本）
-├─ requirements.txt    # 运行依赖
-├─ run.ps1             # Windows 启动脚本
-├─ .gitignore
-├─ LICENSE
+├─ app.py                    # Streamlit UI（HTTP 调后端）
+├─ fieldops/
+│  ├─ main.py                # FastAPI 入口
+│  ├─ agent.py               # create_agent + 模型选择
+│  ├─ mock_llm.py            # 无 API Key 时的确定性工具调用模型
+│  ├─ rag.py                 # Chroma + HashingEmbeddings + 引用
+│  ├─ tools.py               # 5 个原生工具
+│  ├─ mcp_client.py          # langchain-mcp-adapters
+│  ├─ service.py             # 对话编排 / 审批
+│  ├─ db.py                  # SQLite
+│  ├─ data.py                # JSON 数据访问
+│  └─ schemas.py             # Pydantic
+├─ mcp_server/
+│  └─ cmms_server.py         # FastMCP：create/get work order
+├─ data/
+│  ├─ manuals/               # 6 份示例手册
+│  ├─ devices.json
+│  ├─ parts.json
+│  └─ telemetry.json
+├─ eval/
+│  ├─ questions.jsonl
+│  └─ run_eval.py
+├─ tests/
+│  ├─ test_rag.py
+│  ├─ test_tools.py
+│  ├─ test_service.py
+│  └─ test_api.py
+├─ requirements.txt
+├─ run.ps1
+├─ pytest.ini
 └─ README.md
-```
-
-后续接入后端后，计划扩展为：
-
-```text
-app/
-├─ main.py             # FastAPI：/chat、/work-order/approve
-├─ agent.py            # LangChain create_agent
-├─ rag.py              # Chroma 检索 + 引用
-├─ tools.py            # 3 个原生工具
-├─ mcp_client.py       # langchain-mcp-adapters
-└─ schemas.py          # Pydantic
-
-mcp_server/
-└─ cmms_server.py      # FastMCP：create/get work order
 ```
 
 ---
 
-## Roadmap
+## 评测与测试
 
-- [x] v0.1：Streamlit 界面 + Mock 业务流程
-- [ ] v0.2：Chroma 知识库 + 20–30 份手册 + 页码引用
-- [ ] v0.3：3 个 Native Tools + mock API
-- [ ] v0.4：LangChain `create_agent` 串联 RAG + Tools
-- [ ] v0.5：`cmms-mcp` + `langchain-mcp-adapters`
-- [ ] v0.6：50 条评测集 + 指标报告
-- [ ] v1.0：3 分钟端到端 Demo + 部署说明
+### RAG 检索
+
+```bash
+python eval/run_eval.py
+```
+
+当前结果：
+
+```text
+Recall@4 (doc)  = 15/15 = 100.00%
+Page hit@4      = 15/15 = 100.00%
+```
+
+**说明**：语料只有 6 篇文档、15 条问题，这个 100% 只能证明链路可用，不能说明泛化能力。下一阶段应扩充到 50+ 篇文档、50+ 条问题，并加入 hard negatives。
+
+### 测试
+
+```bash
+pytest -q
+```
+
+当前：`9 passed`。
+
+---
+
+## 模型配置
+
+默认离线模式，无需 API Key：
+
+```text
+MockToolCallingModel -> 规则化选择工具 -> 仍由 LangChain create_agent 执行
+```
+
+使用真实模型：
+
+```powershell
+$env:DEEPSEEK_API_KEY = "sk-..."
+# 可选
+$env:DEEPSEEK_MODEL = "deepseek-chat"
+$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+```
+
+或：
+
+```powershell
+$env:OPENAI_API_KEY = "sk-..."
+$env:OPENAI_MODEL = "gpt-4o-mini"
+```
+
+重启 API 后生效。
 
 ---
 
@@ -136,18 +278,29 @@ mcp_server/
 
 **设备售后运维助手｜LangChain + RAG + Tool Calling + MCP｜个人项目**
 
-- 基于 LangChain 1.x 构建设备售后诊断 Agent，将 RAG 检索、3 个业务工具和 1 个 MCP Server 统一为工具调用，完成从故障描述到工单草稿的闭环。
-- 设计面向设备手册/服务公告的 RAG 链路，按标题切分并保留型号、版本、页码元数据，在 50 条评测集上 Recall@5 达 __%，引用准确率 __%。
-- 将 CMMS 封装为 MCP Server，通过 `langchain-mcp-adapters` 暴露建单/查单能力；写操作经 Streamlit 人工确认后执行，避免误建单。
-- 使用 Streamlit 实现纯 Python 演示界面，支持对话诊断、工单预览与审批，3 分钟完成端到端演示。
+- 基于 LangChain 1.x `create_agent` 构建设备售后诊断 Agent，统一调度 Chroma RAG、5 个业务工具和 1 个 MCP Server，完成从故障描述到工单草稿的闭环。
+- 设计面向设备手册/服务公告的 RAG 链路，按标题切分并保留型号、版本、页码元数据，在 15 条小样本评测集上 Recall@4 为 15/15，回答附带可追溯引用。
+- 将 CMMS 封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露建单/查单能力；写操作经 Streamlit 人工确认后执行，避免误建单。
+- 使用 FastAPI + Streamlit 实现前后端分离 Demo，支持对话诊断、引用来源、工具调用轨迹和工单审批，9 个 pytest 用例覆盖 RAG、工具、服务、MCP 与 API。
 
-> 指标请填你实测的数字；没有实测就写“搭建了 50 条评测集”，不要编。
+> 指标请写你实测的数字；当前 15/15 是小样本，面试时主动说明语料规模，避免被追问时显得夸大。
+
+---
+
+## Roadmap
+
+- [x] v0.1：Streamlit 界面 + Mock 业务流程
+- [x] v0.2：Chroma RAG + 5 个 tools + LangChain Agent + `cmms-mcp` + FastAPI + Streamlit
+- [ ] v0.3：接入真实模型，补 50 条端到端评测
+- [ ] v0.4：PDF/OCR 解析，扩充到 50+ 份手册
+- [ ] v0.5：Docker Compose、鉴权、审计日志
+- [ ] v1.0：真实 CMMS / ERP 适配
 
 ---
 
 ## 数据说明
 
-当前所有设备、故障码、工单、库存均为**虚构演示数据**，不对应任何真实厂商或客户。
+所有设备、故障码、工单、库存均为**虚构演示数据**，不对应任何真实厂商或客户。
 
 ---
 

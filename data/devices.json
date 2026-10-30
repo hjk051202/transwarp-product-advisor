@@ -1,0 +1,22 @@
+{
+  "8F2-1042": {
+    "serial": "8F2-1042",
+    "model": "X100",
+    "customer": "上海某某食品厂",
+    "installed": "2024-03-18",
+    "warranty": "在保",
+    "warranty_end": "2027-06-30",
+    "firmware": "3.2.1",
+    "site": "上海市浦东新区"
+  },
+  "8F2-0917": {
+    "serial": "8F2-0917",
+    "model": "X100",
+    "customer": "上海某饮料厂",
+    "installed": "2023-11-02",
+    "warranty": "已过保",
+    "warranty_end": "2025-11-02",
+    "firmware": "3.1.8",
+    "site": "上海市闵行区"
+  }
+}

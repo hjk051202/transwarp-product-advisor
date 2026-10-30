@@ -1,0 +1,34 @@
+{
+  "8F2-1042": {
+    "asset_id": "8F2-1042",
+    "window_minutes": 30,
+    "latest": {
+      "outlet_temp_c": 96,
+      "fan_rpm": 0,
+      "fan_command_pct": 100,
+      "error_code": "E-204",
+      "error_at": "2026-10-30T10:42:00+08:00",
+      "running": false
+    },
+    "samples": [
+      {"t": "10:12", "outlet_temp_c": 78, "fan_rpm": 1440, "fan_command_pct": 55},
+      {"t": "10:22", "outlet_temp_c": 82, "fan_rpm": 1430, "fan_command_pct": 62},
+      {"t": "10:32", "outlet_temp_c": 88, "fan_rpm": 1200, "fan_command_pct": 78},
+      {"t": "10:40", "outlet_temp_c": 93, "fan_rpm": 300, "fan_command_pct": 96},
+      {"t": "10:42", "outlet_temp_c": 96, "fan_rpm": 0, "fan_command_pct": 100}
+    ]
+  },
+  "8F2-0917": {
+    "asset_id": "8F2-0917",
+    "window_minutes": 30,
+    "latest": {
+      "outlet_temp_c": 78,
+      "fan_rpm": 1450,
+      "fan_command_pct": 58,
+      "error_code": null,
+      "error_at": null,
+      "running": true
+    },
+    "samples": []
+  }
+}
