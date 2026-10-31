@@ -92,6 +92,24 @@ class ProductAdvisorModel(BaseChatModel):
                 return str(message.content)
         return ""
 
+    @staticmethod
+    def _clarify() -> str:
+        return (
+            "### 先确认需求\n"
+            "为了给出靠谱的选型建议，请补充三点：\n\n"
+            "1. **主要负载**：报表/数仓、实时分析、数据湖、OLTP 交易、图关系、AI 建模？\n"
+            "2. **数据量**：GB、TB 还是 PB？\n"
+            "3. **部署要求**：私有云/混合云？是否有麒麟、统信、鲲鹏、海光等国产化要求？\n\n"
+            "如果先给一个方向：\n"
+            "- 报表/数仓/实时分析/HTAP → **ArgoDB**\n"
+            "- 数据湖/多模平台/大量组件 → **TDH**\n"
+            "- 多租户数据云/平台运营 → **TDC**\n"
+            "- 机器学习/知识图谱/隐私计算 → **Sophon**\n"
+            "- 反欺诈/资金流向/多层关系 → **StellarDB**\n"
+            "- 高并发 OLTP/核心交易 → **KunDB**\n\n"
+            "你把行业和负载告诉我，我再给具体对比。"
+        )
+
     def _final_answer(self, messages: list[BaseMessage], query: str) -> str:
         knowledge = self._latest(messages, "search_knowledge")
         comparison = self._latest(messages, "compare_products")
@@ -173,6 +191,38 @@ class ProductAdvisorModel(BaseChatModel):
         )
         wants_cases = any(term in query for term in ["案例", "客户", "同行业", "实践"])
         wants_compat = any(term in query for term in COMPAT_TERMS)
+        specific = bool(products) or any(
+            term in query
+            for term in [
+                "怎么选",
+                "区别",
+                "对比",
+                "案例",
+                "国产化",
+                "兼容",
+                "报价",
+                "POC",
+                "试用",
+                "有哪些",
+                "产品线",
+                "HTAP",
+                "OLTP",
+                "数据湖",
+                "多租户",
+                "子产品",
+                "存储模型",
+                "关系查询",
+                "图数据库",
+                "迁移",
+            ]
+        )
+
+        if not specific and not tool_messages:
+            return ChatResult(
+                generations=[
+                    ChatGeneration(message=AIMessage(content=self._clarify()))
+                ]
+            )
 
         if not tool_messages:
             calls = []

@@ -47,11 +47,6 @@ st.markdown(
     }
     .hero-title { font-size:1.65rem; font-weight:800; color:var(--ink); line-height:1.2; }
     .hero-sub { color:var(--muted); font-size:.92rem; margin-top:.2rem; }
-    .hero-tags { display:flex; flex-wrap:wrap; gap:.4rem; justify-content:flex-end; }
-    .tag {
-        font-size:.72rem; font-weight:700; color:var(--brand); background:var(--soft);
-        border-radius:999px; padding:.28rem .6rem; white-space:nowrap;
-    }
     .side-brand {
         display:flex; gap:.7rem; align-items:center; padding:.2rem 0 .9rem 0;
         border-bottom:1px solid var(--line); margin-bottom:.9rem;
@@ -152,13 +147,6 @@ def render_header() -> None:
               <div class="hero-sub">Transwarp Product Advisor · 产品选型与历史会话</div>
             </div>
           </div>
-          <div class="hero-tags">
-            <span class="tag">LangChain</span>
-            <span class="tag">RAG</span>
-            <span class="tag">Tool Calling</span>
-            <span class="tag">MCP</span>
-            <span class="tag">历史会话</span>
-          </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -207,8 +195,6 @@ with st.sidebar:
             f'<span class="muted">模式：{health.get("mode", "")}</span>',
             unsafe_allow_html=True,
         )
-        mcp_tools = health.get("mcp_tools", [])
-        st.caption("MCP：" + (", ".join(mcp_tools) if mcp_tools else "未连接"))
     else:
         st.error("后端未连接")
         st.caption("先运行：uvicorn fieldops.main:app --port 8000")
@@ -397,6 +383,3 @@ elif page == "历史会话":
     render_history()
 else:
     render_stack()
-
-st.divider()
-st.caption("星环产品选型助手 · LangChain + RAG + Tool Calling + MCP")
