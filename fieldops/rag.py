@@ -1,9 +1,4 @@
-"""Offline-friendly RAG over the sample service manuals.
-
-The demo deliberately avoids a hosted embedding API so it can run without any
-API key. The hashing embedder is deterministic and good enough for a small,
-keyword-rich corpus; swap it for BGE-M3 / OpenAI embeddings in production.
-"""
+"""Offline-friendly RAG over public Transwarp product materials."""
 
 from __future__ import annotations
 
@@ -22,14 +17,12 @@ from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from fieldops.config import CHROMA_DIR
-from fieldops.data import load_manuals, load_pdf_manuals
+from fieldops.data import all_knowledge
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-_.]*|[\u4e00-\u9fff]")
 
 
 def tokenize(text: str) -> list[str]:
-    """Latin words + Chinese characters + Chinese bigrams."""
-
     lowered = text.lower()
     tokens = _TOKEN_RE.findall(lowered)
     han = [t for t in tokens if len(t) == 1 and "\u4e00" <= t <= "\u9fff"]
@@ -38,7 +31,7 @@ def tokenize(text: str) -> list[str]:
 
 
 class HashingEmbeddings(Embeddings):
-    """A small deterministic embedding model for offline demos/tests."""
+    """Deterministic offline embedding for demos and tests."""
 
     def __init__(self, dimension: int = 512) -> None:
         self.dimension = dimension
@@ -65,6 +58,7 @@ class HashingEmbeddings(Embeddings):
 class RetrievedDoc:
     doc_id: str
     title: str
+    product: str
     section: str
     page: int | None
     version: str | None
@@ -75,6 +69,7 @@ class RetrievedDoc:
         return {
             "doc_id": self.doc_id,
             "title": self.title,
+            "product": self.product,
             "section": self.section,
             "page": self.page,
             "version": self.version,
@@ -83,12 +78,8 @@ class RetrievedDoc:
         }
 
 
-def _all_manuals() -> list[dict[str, Any]]:
-    return [*load_manuals(), *load_pdf_manuals()]
-
-
 def _manifest() -> str:
-    ids = sorted(manual["id"] for manual in _all_manuals())
+    ids = sorted(item["id"] for item in all_knowledge())
     return hashlib.sha256(json.dumps(ids, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
@@ -99,21 +90,17 @@ def _make_chunks() -> list[Document]:
         separators=["\n## ", "\n### ", "\n\n", "\n", "。", "；", " "],
     )
     chunks: list[Document] = []
-    for manual in _all_manuals():
+    for document in all_knowledge():
         metadata = {
             key: value
-            for key, value in manual["metadata"].items()
+            for key, value in document["metadata"].items()
             if isinstance(value, (str, int, float, bool))
         }
-        for index, chunk in enumerate(splitter.split_text(manual["text"])):
+        for index, chunk in enumerate(splitter.split_text(document["text"])):
             chunks.append(
                 Document(
                     page_content=chunk,
-                    metadata={
-                        **metadata,
-                        "chunk_index": index,
-                        "doc_id": manual["id"],
-                    },
+                    metadata={**metadata, "chunk_index": index, "doc_id": document["id"]},
                 )
             )
     return chunks
@@ -122,22 +109,22 @@ def _make_chunks() -> list[Document]:
 @lru_cache(maxsize=1)
 def get_vectorstore() -> Chroma:
     manifest_path = CHROMA_DIR / "manifest.txt"
-    current_manifest = _manifest()
-    if not manifest_path.exists() or manifest_path.read_text(encoding="utf-8") != current_manifest:
+    current = _manifest()
+    if not manifest_path.exists() or manifest_path.read_text(encoding="utf-8") != current:
         shutil.rmtree(CHROMA_DIR, ignore_errors=True)
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
     store = Chroma(
-        collection_name="fieldops_manuals",
+        collection_name="transwarp_knowledge",
         embedding_function=HashingEmbeddings(),
         persist_directory=str(CHROMA_DIR),
         collection_metadata={"hnsw:space": "cosine"},
     )
-    if store._collection.count() == 0:  # small corpus, build once
+    if store._collection.count() == 0:
         chunks = _make_chunks()
         ids = [f"{c.metadata['doc_id']}-{c.metadata['chunk_index']}" for c in chunks]
         store.add_documents(chunks, ids=ids)
-        manifest_path.write_text(current_manifest, encoding="utf-8")
+        manifest_path.write_text(current, encoding="utf-8")
     return store
 
 
@@ -147,28 +134,30 @@ def _keyword_score(query: str, text: str) -> float:
     if not q or not d:
         return 0.0
     coverage = len(q & d) / len(q)
-    if "e-204" in query.lower() and "e-204" in text.lower():
-        coverage += 0.35
+    for term in ["argodb", "tdh", "tdc", "sophon", "stellardb", "kundb"]:
+        if term in query.lower() and term in text.lower():
+            coverage += 0.2
     return min(coverage, 1.0)
 
 
-def search(query: str, k: int = 4, model: str = "X100") -> list[RetrievedDoc]:
-    store = get_vectorstore()
-    raw = store.similarity_search_with_score(
-        query,
-        k=max(k * 3, 10),
-        filter={"model": model},
-    )
+def search(query: str, k: int = 4) -> list[RetrievedDoc]:
+    raw = get_vectorstore().similarity_search_with_score(query, k=max(k * 3, 12))
     results: list[RetrievedDoc] = []
     for document, distance in raw:
-        # cosine distance in [0, 2] -> similarity in [0, 1]
         vector_score = max(0.0, 1.0 - float(distance) / 2.0)
-        combined = 0.7 * vector_score + 0.3 * _keyword_score(query, document.page_content)
         metadata = document.metadata
+        product = str(metadata.get("product", ""))
+        product_bonus = 0.25 if product.lower() in query.lower() else 0.0
+        combined = (
+            0.6 * vector_score
+            + 0.25 * _keyword_score(query, document.page_content)
+            + product_bonus
+        )
         results.append(
             RetrievedDoc(
                 doc_id=str(metadata.get("doc_id", "")),
                 title=str(metadata.get("title", "")),
+                product=str(metadata.get("product", "")),
                 section=str(metadata.get("section", "")),
                 page=metadata.get("page") if isinstance(metadata.get("page"), int) else None,
                 version=str(metadata.get("version")) if metadata.get("version") else None,
@@ -181,11 +170,7 @@ def search(query: str, k: int = 4, model: str = "X100") -> list[RetrievedDoc]:
 
 
 def search_json(query: str, k: int = 4) -> str:
-    results = search(query, k=k)
     return json.dumps(
-        {
-            "query": query,
-            "results": [doc.to_dict() for doc in results],
-        },
+        {"query": query, "results": [doc.to_dict() for doc in search(query, k=k)]},
         ensure_ascii=False,
     )

@@ -1,1 +1,1 @@
-"""CMMS MCP server package."""
+"""CRM MCP server package."""

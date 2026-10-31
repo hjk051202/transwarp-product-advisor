@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for the FieldOps Copilot backend."""
+"""FastAPI entrypoint for the Transwarp product advisor."""
 
 from __future__ import annotations
 
@@ -15,10 +15,12 @@ from fastapi.responses import JSONResponse
 from fieldops import audit
 from fieldops.agent import get_agent
 from fieldops.config import APP_NAME
-from fieldops.db import get_draft, init_db, list_audit
+from fieldops.db import get_lead, init_db, list_audit
 from fieldops.mcp_client import get_mcp_tools
 from fieldops.schemas import ApproveResponse, ChatRequest, ChatResponse
-from fieldops.service import approve, chat, drafts
+from fieldops.service import approve, chat, leads
+
+PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
 
 def api_key() -> str:
@@ -28,7 +30,6 @@ def api_key() -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    # Build eagerly so MCP discovery problems show up at startup.
     await get_agent()
     yield
 
@@ -41,8 +42,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
 
 @app.middleware("http")
@@ -80,33 +79,38 @@ async def health() -> dict[str, Any]:
         "version": "1.0.0",
         "mode": mode,
         "auth_enabled": bool(api_key()),
-        "mcp_url": os.getenv("CMMS_MCP_URL", "http://127.0.0.1:8765/mcp"),
+        "mcp_url": os.getenv("CRM_MCP_URL", "http://127.0.0.1:8765/mcp"),
         "mcp_tools": [tool.name for tool in tools],
     }
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
-    return await chat(request.message, request.serial)
+    return await chat(
+        request.message,
+        company=request.company,
+        industry=request.industry,
+        contact=request.contact,
+    )
 
 
-@app.get("/work-orders")
-async def list_work_orders() -> list[dict[str, Any]]:
-    return drafts()
+@app.get("/leads")
+async def list_leads_endpoint() -> list[dict[str, Any]]:
+    return leads()
 
 
-@app.get("/work-orders/{draft_id}")
-async def get_work_order(draft_id: str) -> dict[str, Any]:
-    draft = get_draft(draft_id)
-    if not draft:
-        raise HTTPException(status_code=404, detail="draft not found")
-    return draft
+@app.get("/leads/{lead_id}")
+async def get_lead_endpoint(lead_id: str) -> dict[str, Any]:
+    lead = get_lead(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="lead not found")
+    return lead
 
 
-@app.post("/work-orders/{draft_id}/approve", response_model=ApproveResponse)
-async def approve_work_order(draft_id: str) -> ApproveResponse:
+@app.post("/leads/{lead_id}/approve", response_model=ApproveResponse)
+async def approve_lead_endpoint(lead_id: str) -> ApproveResponse:
     try:
-        return await approve(draft_id)
+        return await approve(lead_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

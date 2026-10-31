@@ -1,4 +1,4 @@
-"""SQLite persistence for draft and approved work orders."""
+"""SQLite persistence for leads and audit logs."""
 
 from __future__ import annotations
 
@@ -28,16 +28,14 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
     with connect(db_path) as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS work_orders (
-                draft_id TEXT PRIMARY KEY,
-                work_order_id TEXT,
-                asset_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL,
-                priority TEXT NOT NULL,
-                parts_json TEXT NOT NULL,
-                safety_json TEXT NOT NULL,
-                scheduled_at TEXT,
+            CREATE TABLE IF NOT EXISTS leads (
+                lead_id TEXT PRIMARY KEY,
+                crm_lead_id TEXT,
+                company TEXT NOT NULL,
+                industry TEXT NOT NULL,
+                contact TEXT NOT NULL,
+                need TEXT NOT NULL,
+                products_json TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 approved_at TEXT
@@ -60,16 +58,15 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
         conn.commit()
 
 
-def create_draft(
+def create_lead(
     *,
-    draft_id: str,
-    asset_id: str,
-    title: str,
-    description: str,
-    priority: str,
-    parts: list[str],
-    safety: list[str],
-    scheduled_at: str | None,
+    lead_id: str,
+    company: str,
+    industry: str,
+    contact: str,
+    need: str,
+    products: list[str],
+    status: str = "draft",
     db_path: Path | str = DB_PATH,
 ) -> dict[str, Any]:
     init_db(db_path)
@@ -77,71 +74,65 @@ def create_draft(
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO work_orders
-            (draft_id, work_order_id, asset_id, title, description, priority,
-             parts_json, safety_json, scheduled_at, status, created_at, approved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO leads
+            (lead_id, crm_lead_id, company, industry, contact, need,
+             products_json, status, created_at, approved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                draft_id,
+                lead_id,
                 None,
-                asset_id,
-                title,
-                description,
-                priority,
-                json.dumps(parts, ensure_ascii=False),
-                json.dumps(safety, ensure_ascii=False),
-                scheduled_at,
-                "draft",
+                company,
+                industry,
+                contact,
+                need,
+                json.dumps(products, ensure_ascii=False),
+                status,
                 now,
                 None,
             ),
         )
         conn.commit()
-    return get_draft(draft_id, db_path=db_path)  # type: ignore[return-value]
+    return get_lead(lead_id, db_path=db_path)  # type: ignore[return-value]
 
 
-def get_draft(draft_id: str, db_path: Path | str = DB_PATH) -> dict[str, Any] | None:
+def get_lead(lead_id: str, db_path: Path | str = DB_PATH) -> dict[str, Any] | None:
     with connect(db_path) as conn:
-        row = conn.execute(
-            "SELECT * FROM work_orders WHERE draft_id = ?", (draft_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM leads WHERE lead_id = ?", (lead_id,)).fetchone()
     return _row_to_dict(row)
 
 
-def list_drafts(db_path: Path | str = DB_PATH) -> list[dict[str, Any]]:
+def list_leads(db_path: Path | str = DB_PATH) -> list[dict[str, Any]]:
     with connect(db_path) as conn:
         rows = conn.execute(
-            "SELECT * FROM work_orders ORDER BY created_at DESC LIMIT 20"
+            "SELECT * FROM leads ORDER BY created_at DESC LIMIT 30"
         ).fetchall()
     return [_row_to_dict(row) for row in rows if row is not None]
 
 
-def approve_draft(
-    draft_id: str,
-    work_order_id: str,
-    db_path: Path | str = DB_PATH,
+def approve_lead(
+    lead_id: str, crm_lead_id: str, db_path: Path | str = DB_PATH
 ) -> dict[str, Any] | None:
     now = datetime.now(timezone.utc).isoformat()
     with connect(db_path) as conn:
         conn.execute(
             """
-            UPDATE work_orders
-            SET status = 'approved', work_order_id = ?, approved_at = ?
-            WHERE draft_id = ? AND status = 'draft'
+            UPDATE leads
+            SET status = 'approved', crm_lead_id = ?, approved_at = ?
+            WHERE lead_id = ? AND status = 'draft'
             """,
-            (work_order_id, now, draft_id),
+            (crm_lead_id, now, lead_id),
         )
         conn.commit()
-    return get_draft(draft_id, db_path=db_path)
+    return get_lead(lead_id, db_path=db_path)
 
 
-def get_by_work_order_id(
-    work_order_id: str, db_path: Path | str = DB_PATH
+def get_by_crm_lead_id(
+    crm_lead_id: str, db_path: Path | str = DB_PATH
 ) -> dict[str, Any] | None:
     with connect(db_path) as conn:
         row = conn.execute(
-            "SELECT * FROM work_orders WHERE work_order_id = ?", (work_order_id,)
+            "SELECT * FROM leads WHERE crm_lead_id = ?", (crm_lead_id,)
         ).fetchone()
     return _row_to_dict(row)
 
@@ -155,6 +146,7 @@ def log_audit(
     detail: dict[str, Any] | None = None,
     db_path: Path | str = DB_PATH,
 ) -> None:
+    init_db(db_path)
     with connect(db_path) as conn:
         conn.execute(
             """
@@ -175,6 +167,7 @@ def log_audit(
 
 
 def list_audit(limit: int = 50, db_path: Path | str = DB_PATH) -> list[dict[str, Any]]:
+    init_db(db_path)
     with connect(db_path) as conn:
         rows = conn.execute(
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
@@ -191,6 +184,5 @@ def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     data = dict(row)
-    data["parts"] = json.loads(data.pop("parts_json"))
-    data["safety"] = json.loads(data.pop("safety_json"))
+    data["products"] = json.loads(data.pop("products_json"))
     return data

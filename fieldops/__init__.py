@@ -1,1 +1,1 @@
-"""FieldOps Copilot backend package."""
+"""Transwarp product advisor backend package."""

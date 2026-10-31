@@ -1,9 +1,9 @@
-"""End-to-end evaluation against the offline mock agent.
+"""End-to-end evaluation for the product advisor.
 
-Metrics are intentionally simple and reproducible:
+Metrics:
 - citation_hit: expected document appears in returned citations
 - answer_hit: at least one expected keyword appears in the answer
-- draft_hit: draft presence matches expectation
+- lead_hit: lead presence matches expectation
 - latency
 """
 
@@ -32,12 +32,17 @@ async def main() -> None:
     ]
     citation_hits = 0
     answer_hits = 0
-    draft_hits = 0
+    lead_hits = 0
     latencies: list[float] = []
 
     for row in rows:
         start = time.perf_counter()
-        response = await chat(row["question"], row.get("serial", "8F2-1042"))
+        response = await chat(
+            row["question"],
+            company=row.get("company"),
+            industry=row.get("industry"),
+            contact=row.get("contact"),
+        )
         elapsed = (time.perf_counter() - start) * 1000
         latencies.append(elapsed)
 
@@ -45,14 +50,14 @@ async def main() -> None:
         expected_doc = row.get("expected_doc")
         citation_hit = expected_doc is None or expected_doc in cited
         answer_hit = any(keyword in response.answer for keyword in row.get("keywords", []))
-        draft_hit = (response.draft is not None) == bool(row.get("expect_draft"))
+        lead_hit = (response.lead is not None) == bool(row.get("expect_lead"))
 
         citation_hits += int(citation_hit)
         answer_hits += int(answer_hit)
-        draft_hits += int(draft_hit)
+        lead_hits += int(lead_hit)
         print(
             f"{row['id']}  citation={citation_hit!s:5}  answer={answer_hit!s:5}  "
-            f"draft={draft_hit!s:5}  {elapsed:6.0f}ms"
+            f"lead={lead_hit!s:5}  {elapsed:6.0f}ms"
         )
 
     total = len(rows)
@@ -60,7 +65,7 @@ async def main() -> None:
     print()
     print(f"citation_hit@4  = {citation_hits}/{total} = {citation_hits / total:.2%}")
     print(f"answer_keyword  = {answer_hits}/{total} = {answer_hits / total:.2%}")
-    print(f"draft_expect    = {draft_hits}/{total} = {draft_hits / total:.2%}")
+    print(f"lead_expect     = {lead_hits}/{total} = {lead_hits / total:.2%}")
     print(f"p50 latency     = {latencies[len(latencies) // 2]:.0f} ms")
     print(f"p95 latency     = {latencies[int(len(latencies) * 0.95) - 1]:.0f} ms")
 

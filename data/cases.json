@@ -1,0 +1,56 @@
+[
+  {
+    "id": "case-fin-01",
+    "industry": "金融",
+    "customer": "某城商行（匿名）",
+    "scenario": "企业级数据仓库与报表分析",
+    "products": ["ArgoDB", "TDH"],
+    "summary": "以 ArgoDB 承载高性能分析，TDH 负责数据湖与多模数据加工，支撑报表、风控和监管报送。",
+    "outcome": "查询响应从分钟级降到秒级，原有数仓平滑迁移。"
+  },
+  {
+    "id": "case-fin-02",
+    "industry": "金融",
+    "customer": "某银行审计部（匿名）",
+    "scenario": "集团派系与资金流向图谱",
+    "products": ["StellarDB"],
+    "summary": "用图数据库存储企业、个人、账户、担保关系，支持多层股权和资金链路分析。",
+    "outcome": "支持 4 层以上关系查询，反欺诈和审计效率提升。"
+  },
+  {
+    "id": "case-gov-01",
+    "industry": "政务",
+    "customer": "某政府机构（匿名）",
+    "scenario": "政务数据共享与多模分析",
+    "products": ["TDH", "ArgoDB"],
+    "summary": "TDH 承载多源数据接入与治理，ArgoDB 提供面向报表和主题分析的高性能 SQL 能力。",
+    "outcome": "形成统一数据底座，支撑多个委办局的数据共享。"
+  },
+  {
+    "id": "case-energy-01",
+    "industry": "能源",
+    "customer": "某能源集团（匿名）",
+    "scenario": "设备时序数据与知识图谱",
+    "products": ["TDH", "StellarDB", "Sophon"],
+    "summary": "TDH 处理时序与日志数据，StellarDB 构建设备关系图谱，Sophon 做故障预测和模型服务。",
+    "outcome": "设备故障检索从人工翻文档变为图谱化关联分析。"
+  },
+  {
+    "id": "case-mfg-01",
+    "industry": "制造",
+    "customer": "某制造企业（匿名）",
+    "scenario": "工业知识图谱与质量分析",
+    "products": ["StellarDB", "Sophon"],
+    "summary": "把设备、工艺、物料、质量缺陷组织成知识图谱，结合模型做根因分析。",
+    "outcome": "质量问题的关联排查时间明显缩短。"
+  },
+  {
+    "id": "case-cloud-01",
+    "industry": "金融",
+    "customer": "某金融集团（匿名）",
+    "scenario": "多租户数据云平台",
+    "products": ["TDC", "ArgoDB"],
+    "summary": "TDC 提供多租户、弹性伸缩的数据平台，ArgoDB 为各租户提供分析型数据库服务。",
+    "outcome": "集团内多个子公司共用一套数据底座，资源按租户隔离。"
+  }
+]

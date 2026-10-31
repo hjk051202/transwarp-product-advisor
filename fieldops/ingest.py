@@ -10,13 +10,13 @@ import shutil
 from typing import Any
 
 from fieldops.config import CHROMA_DIR
-from fieldops.data import load_manuals, load_pdf_manuals
+from fieldops.data import load_knowledge, load_pdf_knowledge
 from fieldops.rag import get_vectorstore
 
 
 def corpus_stats() -> dict[str, Any]:
-    markdown = load_manuals()
-    pdfs = load_pdf_manuals()
+    markdown = load_knowledge()
+    pdfs = load_pdf_knowledge()
     return {
         "markdown_docs": len(markdown),
         "pdf_docs": len(pdfs),

@@ -14,17 +14,19 @@ def test_health_and_chat() -> None:
         response = client.post(
             "/chat",
             json={
-                "message": "X100 报 E-204，出水温度高，客户已停机。",
-                "serial": "8F2-1042",
+                "message": "ArgoDB 和 TDH 怎么选？",
+                "company": "某城商行",
+                "industry": "金融",
+                "contact": "demo@example.com",
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["answer"]
         assert data["citations"]
-        assert data["draft"]["draft_id"].startswith("DRF-")
+        assert data["lead"]["lead_id"].startswith("LEAD-")
 
-        draft_id = data["draft"]["draft_id"]
-        approved = client.post(f"/work-orders/{draft_id}/approve")
+        lead_id = data["lead"]["lead_id"]
+        approved = client.post(f"/leads/{lead_id}/approve")
         assert approved.status_code == 200
-        assert approved.json()["work_order_id"].startswith("WO-")
+        assert approved.json()["crm_lead_id"].startswith("CRM-")

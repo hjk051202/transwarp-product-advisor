@@ -1,4 +1,4 @@
-"""Generate small ASCII PDFs used to test the PDF ingestion path.
+"""Generate small ASCII PDFs for the PDF ingestion demo.
 
 Run:
     python scripts/generate_pdfs.py
@@ -13,74 +13,58 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 ROOT = Path(__file__).resolve().parent.parent
-PDF_DIR = ROOT / "data" / "manuals" / "pdf"
+PDF_DIR = ROOT / "data" / "knowledge" / "pdf"
 
 DOCS = {
-    "x100_manual_p84": {
+    "argodb_overview": {
         "frontmatter": {
-            "doc_id": "pdf-x100-manual-7-3",
-            "title": "X100 Service Manual (PDF)",
-            "model": "X100",
-            "doc_type": "manual",
-            "version": "v3.2",
-            "section": "7.3 Cooling Fan and Overheat Protection",
-            "page": "84",
+            "doc_id": "pdf-argodb",
+            "title": "Transwarp ArgoDB Overview (PDF)",
+            "product": "ArgoDB",
+            "doc_type": "product",
+            "version": "public-2026",
+            "section": "Analytical Database and HTAP",
+            "page": "1",
         },
-        "body": """7.3 Cooling Fan and Overheat Protection
+        "body": """Transwarp ArgoDB Overview
 
-The X100 compressor trips E-204 when outlet water temperature exceeds 95 C and
-the cooling fan feedback is below 50 rpm while the command is above 90 percent.
+ArgoDB is a distributed analytical database for enterprise data warehousing,
+real-time analytics and HTAP workloads. It supports standard SQL, lakehouse
+architecture, multi-model data and elastic scaling.
 
-Check the following items in order:
-1. Lock out and tag out (LOTO) the main power.
-2. Inspect fan connector XF3 for loose or burnt pins.
-3. Measure F3 fuse continuity; replace with a 5 A slow-blow fuse if open.
-4. Manually rotate the fan; replace fan assembly FAN-12038 if seized.
+Typical scenarios:
+- Enterprise data warehouse and BI reporting
+- Real-time dashboards and risk analytics
+- HTAP with high-concurrency point queries
+- Disaster recovery and multi-tenant platforms
 
-Never hot-plug the fan connector. Confirm the fan has stopped before service.""",
+If the customer mainly needs a platform-level data lake with many components,
+evaluate TDH. If the workload is high-concurrency OLTP, evaluate KunDB.""",
     },
-    "sb_2025_11_pdf": {
+    "tdh_overview": {
         "frontmatter": {
-            "doc_id": "pdf-sb-2025-11",
-            "title": "Service Bulletin SB-2025-11 (PDF)",
-            "model": "X100",
-            "doc_type": "service_bulletin",
-            "version": "1.0",
-            "section": "E-204 Fan Connector Batch Issue",
-            "page": "2",
+            "doc_id": "pdf-tdh",
+            "title": "Transwarp Data Hub Overview (PDF)",
+            "product": "TDH",
+            "doc_type": "product",
+            "version": "public-2026",
+            "section": "One-stop Big Data Platform",
+            "page": "1",
         },
-        "body": """Service Bulletin SB-2025-11
+        "body": """Transwarp Data Hub Overview
 
-Affected X100 units built between January 2024 and September 2024 may develop
-high contact resistance at fan connector XF3 in hot and humid sites.
+TDH is a one-stop big data platform covering data lake, data warehouse,
+real-time streaming and multi-model storage. It provides 10 storage engines and
+11 data models, with unified SQL and a unified compute engine.
 
-Recommended action:
-1. Inspect XF3 for oxidation, pushed-back pins, or burning.
-2. Replace the harness with improved part HARN-XF3-02 when affected.
-3. If F3 is open, check fan motor current before replacing the fuse.
-4. Record the connector batch number in the work order.""",
-    },
-    "sop_loto_pdf": {
-        "frontmatter": {
-            "doc_id": "pdf-sop-loto",
-            "title": "LOTO Safety SOP (PDF)",
-            "model": "X100",
-            "doc_type": "sop",
-            "version": "2.1",
-            "section": "Lockout Tagout and Zero Energy",
-            "page": "3",
-        },
-        "body": """Lockout Tagout and Zero Energy
+Typical scenarios:
+- Enterprise data lake and lakehouse
+- Multi-model analytics across relational, graph, search, time-series data
+- Real-time streaming and data warehouse
+- Platform-level big data foundation with operations tooling
 
-Before inspecting the fan, fuse, or electrical connections:
-1. Notify the customer and stop the machine.
-2. Open the main disconnect and apply a lock and tag.
-3. Wait five minutes and verify DC bus voltage is below 36 V.
-4. Measure fan terminals with a multimeter.
-5. Confirm the fan wheel is completely stopped.
-
-Do not bypass F3. Do not hot-plug the fan connector. Do not remove the fan
-before zero energy is verified.""",
+If the customer only needs an analytical database, ArgoDB is more focused.
+If the customer wants a multi-tenant data cloud, evaluate TDC.""",
     },
 }
 
@@ -109,7 +93,6 @@ def build_pdf(name: str, data: dict) -> Path:
             c.drawString(50, y, line)
             y -= 14
         y -= 4
-
     c.save()
     return path
 
@@ -117,8 +100,7 @@ def build_pdf(name: str, data: dict) -> Path:
 def main() -> None:
     PDF_DIR.mkdir(parents=True, exist_ok=True)
     for name, data in DOCS.items():
-        path = build_pdf(name, data)
-        print(f"wrote {path.relative_to(ROOT)}")
+        print(f"wrote {build_pdf(name, data).relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

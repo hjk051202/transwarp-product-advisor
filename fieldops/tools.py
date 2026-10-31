@@ -1,22 +1,21 @@
-"""Native LangChain tools used by the FieldOps agent."""
+"""Native LangChain tools for product selection and lead capture."""
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from langchain_core.tools import tool
 
-from fieldops.db import create_draft, init_db
-from fieldops.integrations import build_erp_adapter
+from fieldops.data import (
+    check_compatibility as compatibility_lookup,
+    get_product,
+    list_products as list_product_data,
+    search_cases as search_case_data,
+)
+from fieldops.db import create_lead
 from fieldops.rag import search_json
-
-DEFAULT_SAFETY = [
-    "执行 LOTO 断电并确认零能量",
-    "禁止带电插拔风扇接插件",
-    "更换风扇前确认叶轮完全停止",
-]
 
 
 def _dumps(data: object) -> str:
@@ -24,124 +23,162 @@ def _dumps(data: object) -> str:
 
 
 @tool
-def get_telemetry(asset_id: str, minutes: int = 30) -> str:
-    """查询设备最近一段时间的实时工况。
-
-    当用户询问设备当前温度、风扇转速、故障码、是否停机时使用。
-
-    Args:
-        asset_id: 设备序列号，例如 8F2-1042。
-        minutes: 查询最近多少分钟，默认 30。
-    """
-
-    data = build_erp_adapter().get_telemetry(asset_id, minutes)
-    if not data:
-        return _dumps({"error": f"未找到设备 {asset_id} 的遥测数据"})
-    return _dumps(data)
-
-
-@tool
-def check_warranty(serial: str) -> str:
-    """查询设备保修状态。
-
-    当用户询问是否在保、保修到期时间、能否免费换件时使用。
-
-    Args:
-        serial: 设备序列号，例如 8F2-1042。
-    """
-
-    device = build_erp_adapter().get_warranty(serial)
-    if not device:
-        return _dumps({"error": f"未找到设备 {serial}"})
-    return _dumps(
-        {
-            "serial": device["serial"],
-            "model": device["model"],
-            "customer": device["customer"],
-            "warranty": device["warranty"],
-            "warranty_end": device["warranty_end"],
-        }
-    )
-
-
-@tool
-def check_parts(part_no: str, region: str = "上海") -> str:
-    """查询备件库存和价格。
-
-    当用户询问某个备件有没有货、在哪个仓、多少钱时使用。
-
-    Args:
-        part_no: 备件号，例如 FAN-12038。
-        region: 仓库区域，默认上海。
-    """
-
-    part = build_erp_adapter().get_part(part_no, region)
-    if not part:
-        return _dumps({"error": f"未找到备件 {part_no}"})
-    return _dumps(part)
-
-
-@tool
 def search_knowledge(query: str) -> str:
-    """检索设备手册、服务公告、SOP 和历史工单。
+    """检索星环产品资料、选型指南、案例和兼容性说明。
 
-    当需要故障码解释、排查步骤、安全规范或相似案例时使用。
-    返回结果包含 doc_id、页码和原文片段，回答时必须引用。
+    当需要产品定位、适用场景、案例或国产化兼容性依据时使用。
+    返回结果包含 doc_id、产品、章节、页码和原文片段，回答时应引用。
 
     Args:
-        query: 检索关键词，例如 E-204 高温 风扇。
+        query: 检索关键词，例如 ArgoDB TDH 数据仓库 选型。
     """
 
     return search_json(query, k=4)
 
 
 @tool
-def draft_work_order(
-    asset_id: str,
-    title: str,
-    description: str,
-    priority: str = "P2",
-    parts: list[str] | None = None,
-    scheduled_at: str | None = None,
-) -> str:
-    """生成工单草稿，但不写入 CMMS。
+def list_products(workload: str | None = None, industry: str | None = None) -> str:
+    """列出星环产品及其定位。
 
-    当已经完成诊断、需要把故障、备件和安全提示整理成工单时使用。
-    该工具只写本地 draft 表，必须由工程师在界面上确认后才能正式建单。
+    当客户想了解产品线，或需要按业务负载/行业筛选产品时使用。
 
     Args:
-        asset_id: 设备序列号。
-        title: 工单标题。
-        description: 故障现象、判断依据和处理建议。
-        priority: 优先级，P1/P2/P3，默认 P2。
-        parts: 需要携带的备件号列表。
-        scheduled_at: 建议上门时间，ISO 格式或自然语言描述。
+        workload: 业务负载，例如 报表、实时分析、数据湖、OLTP、图。
+        industry: 行业，例如 金融、政务、能源、制造。
     """
 
-    init_db()
-    parts = parts or []
-    if not scheduled_at:
-        scheduled_at = (datetime.now(timezone.utc) + timedelta(days=1)).strftime(
-            "%Y-%m-%d 10:00"
-        )
-    draft_id = f"DRF-{datetime.now():%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
-    draft = create_draft(
-        draft_id=draft_id,
-        asset_id=asset_id,
-        title=title,
-        description=description,
-        priority=priority,
-        parts=parts,
-        safety=DEFAULT_SAFETY,
-        scheduled_at=scheduled_at,
+    products = list_product_data(workload=workload, industry=industry)
+    return _dumps(
+        [
+            {
+                "product": item["key"],
+                "name": item["name"],
+                "category": item["category"],
+                "one_liner": item["one_liner"],
+                "workloads": item["workloads"],
+                "industries": item["industries"],
+            }
+            for item in products
+        ]
     )
-    return _dumps(draft)
+
+
+@tool
+def compare_products(product_a: str, product_b: str) -> str:
+    """对比两个星环产品的定位、适用场景和差异。
+
+    当客户在两个产品之间犹豫，例如 ArgoDB vs TDH、TDH vs TDC 时使用。
+
+    Args:
+        product_a: 第一个产品名，例如 ArgoDB。
+        product_b: 第二个产品名，例如 TDH。
+    """
+
+    left = get_product(product_a)
+    right = get_product(product_b)
+    if not left or not right:
+        return _dumps(
+            {
+                "error": "产品名不存在，可选：ArgoDB、TDH、TDC、Sophon、StellarDB、KunDB",
+                "product_a": product_a,
+                "product_b": product_b,
+            }
+        )
+    return _dumps(
+        {
+            "product_a": {
+                "product": left["key"],
+                "category": left["category"],
+                "one_liner": left["one_liner"],
+                "workloads": left["workloads"],
+                "strengths": left["strengths"],
+                "not_primary_for": left["not_primary_for"],
+            },
+            "product_b": {
+                "product": right["key"],
+                "category": right["category"],
+                "one_liner": right["one_liner"],
+                "workloads": right["workloads"],
+                "strengths": right["strengths"],
+                "not_primary_for": right["not_primary_for"],
+            },
+            "decision_hint": (
+                f"如果需求更接近 {left['workloads'][0]}，优先 {left['key']}；"
+                f"如果更接近 {right['workloads'][0]}，优先 {right['key']}。"
+            ),
+        }
+    )
+
+
+@tool
+def search_cases(industry: str, scenario: str = "") -> str:
+    """检索星环在某个行业的公开案例摘要。
+
+    当客户问“有没有同行业案例”时使用。
+
+    Args:
+        industry: 行业，例如 金融、政务、能源、制造。
+        scenario: 场景关键词，例如 数据仓库、反欺诈、图谱。
+    """
+
+    cases = search_case_data(industry=industry, scenario=scenario)
+    return _dumps({"industry": industry, "count": len(cases), "cases": cases})
+
+
+@tool
+def check_compatibility(os_name: str, cpu: str) -> str:
+    """查询星环产品对操作系统和 CPU 的兼容性摘要。
+
+    当客户问国产化、麒麟/统信、鲲鹏/海光适配时使用。
+    返回的是演示摘要，具体版本必须以官方兼容性列表为准。
+
+    Args:
+        os_name: 操作系统，例如 麒麟、统信、CentOS。
+        cpu: CPU 架构，例如 x86、鲲鹏、海光。
+    """
+
+    return _dumps(compatibility_lookup(os_name, cpu))
+
+
+@tool
+def draft_lead(
+    company: str,
+    industry: str,
+    contact: str,
+    need: str,
+    products: list[str] | None = None,
+) -> str:
+    """生成售前线索草稿，但不直接写入 CRM。
+
+    当客户表达选型、试用、报价、方案交流等意向时使用。
+    该工具只写本地 draft 表，必须由销售/售前确认后才能写入 CRM。
+
+    Args:
+        company: 客户公司名。
+        industry: 行业。
+        contact: 联系方式（可脱敏）。
+        need: 客户需求摘要。
+        products: 推荐产品列表。
+    """
+
+    products = products or []
+    lead_id = f"LEAD-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
+    lead = create_lead(
+        lead_id=lead_id,
+        company=company or "待补充",
+        industry=industry or "待补充",
+        contact=contact or "待补充",
+        need=need,
+        products=products,
+    )
+    return _dumps(lead)
 
 
 NATIVE_TOOLS = [
     search_knowledge,
-    get_telemetry,
-    check_warranty,
-    check_parts,
-    draft_work_order,
+    list_products,
+    compare_products,
+    search_cases,
+    check_compatibility,
+    draft_lead,
 ]

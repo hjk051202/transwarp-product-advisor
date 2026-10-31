@@ -1,15 +1,16 @@
-{"id": "q01", "question": "X100 报 E-204，风扇转速 0，应该检查什么？", "expected_doc": "x100-manual-7-3", "expected_page": 84}
-{"id": "q02", "question": "E-204 的触发条件是什么？", "expected_doc": "x100-fault-e204", "expected_page": 141}
-{"id": "q03", "question": "E-204 和 F3 保险有什么关系？", "expected_doc": "x100-manual-7-3", "expected_page": 84}
-{"id": "q04", "question": "风扇接插件 XF3 氧化会导致什么故障？", "expected_doc": "sb-2025-11", "expected_page": 2}
-{"id": "q05", "question": "SB-2025-11 涉及哪些生产批次？", "expected_doc": "sb-2025-11", "expected_page": 2}
-{"id": "q06", "question": "检查风扇前怎么做 LOTO 断电？", "expected_doc": "sop-loto", "expected_page": 3}
-{"id": "q07", "question": "更换风扇组件前有哪些安全禁止事项？", "expected_doc": "sop-loto", "expected_page": 3}
-{"id": "q08", "question": "历史工单 4831 最后是怎么修好的？", "expected_doc": "case-4831", "expected_page": 1}
-{"id": "q09", "question": "FAN-12038 是什么备件？", "expected_doc": "parts-catalog", "expected_page": 12}
-{"id": "q10", "question": "E-101 高压保护怎么处理？", "expected_doc": "x100-fault-e204", "expected_page": 141}
-{"id": "q11", "question": "E-305 缺水保护应该检查什么？", "expected_doc": "x100-fault-e204", "expected_page": 141}
-{"id": "q12", "question": "X100 高温保护的温度阈值是多少？", "expected_doc": "x100-manual-7-3", "expected_page": 84}
-{"id": "q13", "question": "风扇接插件改进型线束的件号是什么？", "expected_doc": "sb-2025-11", "expected_page": 2}
-{"id": "q14", "question": "F3 保险的规格是什么？", "expected_doc": "parts-catalog", "expected_page": 12}
-{"id": "q15", "question": "E-204 复位后短时间又出现怎么办？", "expected_doc": "x100-fault-e204", "expected_page": 141}
+{"id": "q01", "question": "ArgoDB 适合什么业务场景？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "q02", "question": "TDH 和 ArgoDB 有什么区别？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "q03", "question": "星环产品支持麒麟和鲲鹏吗？", "expected_doc": "tw-compatibility", "expected_page": 1}
+{"id": "q04", "question": "金融行业有哪些数据仓库案例？", "expected_doc": "tw-finance-cases", "expected_page": 1}
+{"id": "q05", "question": "StellarDB 适合什么场景？", "expected_doc": "tw-stellardb", "expected_page": 1}
+{"id": "q06", "question": "Sophon 有哪些子产品？", "expected_doc": "tw-sophon", "expected_page": 1}
+{"id": "q07", "question": "KunDB 适合 OLTP 吗？", "expected_doc": "tw-kundb", "expected_page": 1}
+{"id": "q08", "question": "TDC 多租户数据云有什么能力？", "expected_doc": "tw-tdc", "expected_page": 1}
+{"id": "q09", "question": "ArgoDB 支持 HTAP 混合负载吗？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "q10", "question": "TDH 支持多少种存储模型？", "expected_doc": "tw-tdh", "expected_page": 1}
+{"id": "q11", "question": "ArgoDB 和 TDH 怎么选？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "q12", "question": "图数据库怎么做反欺诈？", "expected_doc": "tw-stellardb", "expected_page": 1}
+{"id": "q13", "question": "怎么获取报价和 POC？", "expected_doc": "tw-faq", "expected_page": 1}
+{"id": "q14", "question": "Sophon 支持隐私计算吗？", "expected_doc": "tw-sophon", "expected_page": 1}
+{"id": "q15", "question": "TDC 和 TDH 的定位差异是什么？", "expected_doc": "tw-selection-guide", "expected_page": 1}
+{"id": "q16", "question": "ArgoDB overview PDF 讲了什么？", "expected_doc": "pdf-argodb", "expected_page": 1}

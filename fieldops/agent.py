@@ -1,4 +1,4 @@
-"""LangChain agent assembly for FieldOps Copilot."""
+"""LangChain agent assembly for the Transwarp product advisor."""
 
 from __future__ import annotations
 
@@ -15,19 +15,20 @@ from fieldops.config import (
     OPENAI_MODEL,
 )
 from fieldops.mcp_client import get_mcp_tools
-from fieldops.mock_llm import MockToolCallingModel
+from fieldops.mock_llm import ProductAdvisorModel
 from fieldops.tools import NATIVE_TOOLS
 
-SYSTEM_PROMPT = """你是「设备售后运维助手」，面向工业设备厂商的售后工程师。
+SYSTEM_PROMPT = """你是「星环产品选型助手」，面向星环科技的产品售前和客户咨询。
 
 工作规则：
-1. 安全第一：涉及高压、燃气、安全联锁时，先要求停机挂牌（LOTO），再给建议。
-2. 故障诊断必须检索手册/服务公告/历史工单，并引用文档名、章节和页码。
-3. 设备实时工况、保修、备件库存必须调用工具查询，不能凭文档猜测。
-4. 不编造备件号、故障码和处理步骤；资料不足时明确说“资料不足，建议转人工”。
-5. 诊断完成后，调用 draft_work_order 生成工单草稿；不要直接创建正式工单。
-6. 写操作需要工程师在界面上确认，草稿不是正式工单。
-7. 回答结构：初步判断 → 建议排查 → 保修/备件 → 依据。
+1. 先澄清业务负载、数据量、部署环境和国产化要求，再给产品建议。
+2. 产品定位和适用场景必须检索公开产品资料/选型指南，并引用文档名、章节、页码。
+3. 需要对比时调用 compare_products；需要案例时调用 search_cases；国产化问题调用 check_compatibility。
+4. 不编造产品版本、价格、性能数字和客户名称；不确定时明确说“需以官方资料/售前确认为准”。
+5. 对比产品时要说明“为什么不是另一个”，不要只列优点。
+6. 当客户表达选型、试用、报价、方案交流意向时，调用 draft_lead 生成线索草稿；不要直接写 CRM。
+7. 写 CRM 必须由销售/售前在界面上确认。
+8. 回答结构：需求判断 → 推荐方案 → 对比/案例/兼容性 → 依据。
 """
 
 _agent: Any | None = None
@@ -36,21 +37,25 @@ _mode: str = "offline"
 
 def build_model() -> tuple[Any, str]:
     if DEEPSEEK_API_KEY:
-        model = ChatOpenAI(
-            model=DEEPSEEK_MODEL,
-            api_key=DEEPSEEK_API_KEY,
-            base_url=DEEPSEEK_BASE_URL,
-            temperature=0,
+        return (
+            ChatOpenAI(
+                model=DEEPSEEK_MODEL,
+                api_key=DEEPSEEK_API_KEY,
+                base_url=DEEPSEEK_BASE_URL,
+                temperature=0,
+            ),
+            "deepseek",
         )
-        return model, "deepseek"
     if OPENAI_API_KEY:
-        model = ChatOpenAI(
-            model=OPENAI_MODEL,
-            api_key=OPENAI_API_KEY,
-            temperature=0,
+        return (
+            ChatOpenAI(
+                model=OPENAI_MODEL,
+                api_key=OPENAI_API_KEY,
+                temperature=0,
+            ),
+            "openai",
         )
-        return model, "openai"
-    return MockToolCallingModel(), "offline-mock"
+    return ProductAdvisorModel(), "offline-mock"
 
 
 async def build_agent() -> tuple[Any, str]:
@@ -64,11 +69,7 @@ async def build_agent() -> tuple[Any, str]:
     except Exception:
         mode = f"{mode}-mcp-unavailable"
 
-    agent = create_agent(
-        model=model,
-        tools=tools,
-        system_prompt=SYSTEM_PROMPT,
-    )
+    agent = create_agent(model=model, tools=tools, system_prompt=SYSTEM_PROMPT)
     return agent, mode
 
 

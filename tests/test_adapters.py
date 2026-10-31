@@ -2,41 +2,37 @@ from __future__ import annotations
 
 import pytest
 
-from fieldops.db import create_draft
-from fieldops.integrations import build_cmms_adapter, build_erp_adapter
+from fieldops.db import create_lead
+from fieldops.integrations import build_catalog_adapter, build_crm_adapter
 
 
-def test_json_erp_adapter() -> None:
-    erp = build_erp_adapter()
-    warranty = erp.get_warranty("8F2-1042")
-    assert warranty is not None
-    assert warranty["warranty"] == "在保"
+def test_json_catalog_adapter() -> None:
+    catalog = build_catalog_adapter()
+    product = catalog.get_product("ArgoDB")
+    assert product is not None
+    assert product["category"].startswith("分布式分析型")
 
-    part = erp.get_part("FAN-12038")
-    assert part is not None
-    assert part["stock"] == 3
+    products = catalog.list_products(workload="报表")
+    assert any(item["key"] == "ArgoDB" for item in products)
 
-    telemetry = erp.get_telemetry("8F2-1042")
-    assert telemetry is not None
-    assert telemetry["latest"]["fan_rpm"] == 0
+    cases = catalog.search_cases(industry="金融")
+    assert cases
 
 
 @pytest.mark.asyncio
-async def test_local_cmms_adapter(monkeypatch) -> None:
-    monkeypatch.setenv("CMMS_ADAPTER", "local")
-    draft = create_draft(
-        draft_id="DRF-adapter-test",
-        asset_id="8F2-1042",
-        title="adapter test",
-        description="test",
-        priority="P2",
-        parts=["FAN-12038"],
-        safety=["LOTO"],
-        scheduled_at="2026-10-31 10:00",
+async def test_local_crm_adapter(monkeypatch) -> None:
+    monkeypatch.setenv("CRM_ADAPTER", "local")
+    lead = create_lead(
+        lead_id="LEAD-adapter-test",
+        company="adapter test",
+        industry="金融",
+        contact="test@example.com",
+        need="ArgoDB 选型",
+        products=["ArgoDB"],
     )
-    adapter = build_cmms_adapter()
-    result = await adapter.create_work_order(draft)
-    assert result["work_order_id"].startswith("WO-")
-    fetched = await adapter.get_work_order(result["work_order_id"])
+    adapter = build_crm_adapter()
+    result = await adapter.create_lead(lead)
+    assert result["crm_lead_id"].startswith("CRM-")
+    fetched = await adapter.get_lead(result["crm_lead_id"])
     assert fetched is not None
-    assert fetched["draft_id"] == "DRF-adapter-test"
+    assert fetched["lead_id"] == "LEAD-adapter-test"

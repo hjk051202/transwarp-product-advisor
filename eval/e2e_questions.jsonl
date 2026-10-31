@@ -1,20 +1,20 @@
-{"id": "e01", "question": "X100 报 E-204，风扇转速 0，应该检查什么？", "serial": "8F2-1042", "expected_doc": "x100-manual-7-3", "expect_draft": true, "keywords": ["F3", "FAN-12038"]}
-{"id": "e02", "question": "E-204 的触发条件是什么？", "serial": "8F2-1042", "expected_doc": "x100-fault-e204", "expect_draft": true, "keywords": ["95", "风扇"]}
-{"id": "e03", "question": "E-204 和 F3 保险有什么关系？", "serial": "8F2-1042", "expected_doc": "x100-manual-7-3", "expect_draft": true, "keywords": ["F3", "保险"]}
-{"id": "e04", "question": "风扇接插件 XF3 氧化会导致什么故障？", "serial": "8F2-1042", "expected_doc": "sb-2025-11", "expect_draft": false, "keywords": ["XF3", "E-204"]}
-{"id": "e05", "question": "SB-2025-11 涉及哪些生产批次？", "serial": "8F2-1042", "expected_doc": "sb-2025-11", "expect_draft": false, "keywords": ["2024"]}
-{"id": "e06", "question": "检查风扇前怎么做 LOTO 断电？", "serial": "8F2-1042", "expected_doc": "sop-loto", "expect_draft": false, "keywords": ["LOTO", "断电"]}
-{"id": "e07", "question": "更换风扇组件前有哪些安全禁止事项？", "serial": "8F2-1042", "expected_doc": "sop-loto", "expect_draft": false, "keywords": ["禁止", "带电"]}
-{"id": "e08", "question": "历史工单 4831 最后是怎么修好的？", "serial": "8F2-0917", "expected_doc": "case-4831", "expect_draft": false, "keywords": ["F3", "保险"]}
-{"id": "e09", "question": "FAN-12038 是什么备件？", "serial": "8F2-1042", "expected_doc": "parts-catalog", "expect_draft": false, "keywords": ["风扇"]}
-{"id": "e10", "question": "E-101 高压保护怎么处理？", "serial": "8F2-1042", "expected_doc": "x100-fault-e204", "expect_draft": true, "keywords": ["压力"]}
-{"id": "e11", "question": "E-305 缺水保护应该检查什么？", "serial": "8F2-1042", "expected_doc": "x100-fault-e204", "expect_draft": true, "keywords": ["水"]}
-{"id": "e12", "question": "X100 高温保护的温度阈值是多少？", "serial": "8F2-1042", "expected_doc": "x100-manual-7-3", "expect_draft": false, "keywords": ["95"]}
-{"id": "e13", "question": "风扇接插件改进型线束的件号是什么？", "serial": "8F2-1042", "expected_doc": "sb-2025-11", "expect_draft": false, "keywords": ["HARN-XF3-02"]}
-{"id": "e14", "question": "F3 保险的规格是什么？", "serial": "8F2-1042", "expected_doc": "parts-catalog", "expect_draft": false, "keywords": ["5A"]}
-{"id": "e15", "question": "E-204 复位后短时间又出现怎么办？", "serial": "8F2-1042", "expected_doc": "x100-fault-e204", "expect_draft": true, "keywords": ["停机"]}
-{"id": "e16", "question": "SN 8F2-1042 还在保修吗？", "serial": "8F2-1042", "expected_doc": null, "expect_draft": false, "keywords": ["在保"]}
-{"id": "e17", "question": "FAN-12038 上海仓还有库存吗？", "serial": "8F2-1042", "expected_doc": null, "expect_draft": false, "keywords": ["3"]}
-{"id": "e18", "question": "SB-2025-11 的改进型线束是什么？", "serial": "8F2-1042", "expected_doc": "sb-2025-11", "expect_draft": false, "keywords": ["HARN-XF3-02"]}
-{"id": "e19", "question": "X100 服务手册对 E-204 的排查顺序是什么？", "serial": "8F2-1042", "expected_doc": "x100-manual-7-3", "expect_draft": true, "keywords": ["LOTO", "F3"]}
-{"id": "e20", "question": "E-204 的故障代码含义是什么？", "serial": "8F2-1042", "expected_doc": "x100-fault-e204", "expect_draft": true, "keywords": ["冷却风扇", "高温"]}
+{"id": "e01", "question": "我们是城商行，TB 级数据，做报表和风控，ArgoDB 和 TDH 怎么选？", "company": "某城商行", "industry": "金融", "contact": "demo@example.com", "expected_doc": "tw-argodb", "expect_lead": true, "keywords": ["ArgoDB", "TDH"]}
+{"id": "e02", "question": "政务客户想建数据湖，TDH 和 TDC 怎么选？", "company": "某政务云", "industry": "政务", "contact": "gov@example.com", "expected_doc": "tw-tdh", "expect_lead": true, "keywords": ["TDH", "TDC"]}
+{"id": "e03", "question": "金融反欺诈，StellarDB 能做吗？", "company": "某银行", "industry": "金融", "contact": "bank@example.com", "expected_doc": "tw-stellardb", "expect_lead": false, "keywords": ["StellarDB", "反欺诈"]}
+{"id": "e04", "question": "制造企业想做知识图谱和故障预测，Sophon 和 StellarDB 怎么选？", "company": "某制造集团", "industry": "制造", "contact": "mfg@example.com", "expected_doc": "tw-sophon", "expect_lead": true, "keywords": ["Sophon", "StellarDB"]}
+{"id": "e05", "question": "我们要求麒麟 + 鲲鹏国产化，ArgoDB 支持吗？", "company": "某能源集团", "industry": "能源", "contact": "energy@example.com", "expected_doc": "tw-compatibility", "expect_lead": false, "keywords": ["麒麟", "鲲鹏"]}
+{"id": "e06", "question": "星环有哪些产品？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": null, "expect_lead": false, "keywords": ["ArgoDB", "TDH"]}
+{"id": "e07", "question": "金融行业有数据仓库案例吗？", "company": "某银行", "industry": "金融", "contact": "bank@example.com", "expected_doc": "tw-finance-cases", "expect_lead": false, "keywords": ["数据仓库", "金融"]}
+{"id": "e08", "question": "ArgoDB 支持 HTAP 吗？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-argodb", "expect_lead": false, "keywords": ["HTAP"]}
+{"id": "e09", "question": "TDH 支持多少种存储模型？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-tdh", "expect_lead": false, "keywords": ["11"]}
+{"id": "e10", "question": "KunDB 适合高并发交易吗？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-kundb", "expect_lead": false, "keywords": ["OLTP", "交易"]}
+{"id": "e11", "question": "TDC 多租户怎么隔离资源？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-tdc", "expect_lead": false, "keywords": ["多租户", "隔离"]}
+{"id": "e12", "question": "Sophon 包含哪些子产品？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-sophon", "expect_lead": false, "keywords": ["Sophon Base", "Sophon KG"]}
+{"id": "e13", "question": "想申请 ArgoDB 试用，怎么联系？", "company": "某企业", "industry": "金融", "contact": "demo@example.com", "expected_doc": "tw-argodb", "expect_lead": true, "keywords": ["试用", "联系"]}
+{"id": "e14", "question": "ArgoDB 和 TDH 的报价和 POC 怎么安排？", "company": "某集团", "industry": "金融", "contact": "demo@example.com", "expected_doc": null, "expect_lead": true, "keywords": ["报价", "POC"]}
+{"id": "e15", "question": "政务行业 TDH 有哪些案例？", "company": "某政务云", "industry": "政务", "contact": "gov@example.com", "expected_doc": "tw-finance-cases", "expect_lead": false, "keywords": ["政务", "TDH"]}
+{"id": "e16", "question": "我们想把 Teradata 迁移到 ArgoDB，能做吗？", "company": "某银行", "industry": "金融", "contact": "bank@example.com", "expected_doc": "tw-argodb", "expect_lead": false, "keywords": ["迁移", "ArgoDB"]}
+{"id": "e17", "question": "StellarDB 支持多少层关系查询？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-stellardb", "expect_lead": false, "keywords": ["10"]}
+{"id": "e18", "question": "Sophon 的隐私计算子产品叫什么？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-sophon", "expect_lead": false, "keywords": ["P²C"]}
+{"id": "e19", "question": "TDC 和 ArgoDB 怎么组合？", "company": "某集团", "industry": "金融", "contact": "demo@example.com", "expected_doc": "tw-selection-guide", "expect_lead": false, "keywords": ["TDC", "ArgoDB"]}
+{"id": "e20", "question": "我们是制造企业，想选型 TDH + StellarDB + Sophon，怎么联系？", "company": "某制造集团", "industry": "制造", "contact": "mfg@example.com", "expected_doc": "tw-selection-guide", "expect_lead": true, "keywords": ["TDH", "StellarDB", "Sophon"]}

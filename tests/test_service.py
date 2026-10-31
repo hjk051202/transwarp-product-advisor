@@ -6,19 +6,29 @@ from fieldops.service import approve, chat
 
 
 @pytest.mark.asyncio
-async def test_chat_returns_citations_and_draft() -> None:
-    response = await chat("X100 报 E-204，出水温度高，客户已停机。", "8F2-1042")
+async def test_chat_returns_citations_and_lead() -> None:
+    response = await chat(
+        "我们是城商行，做报表和风控，ArgoDB 和 TDH 怎么选？",
+        company="某城商行",
+        industry="金融",
+        contact="demo@example.com",
+    )
     assert response.answer
     assert response.citations
-    assert any(citation.doc_id == "x100-manual-7-3" for citation in response.citations)
-    assert response.draft is not None
-    assert response.draft.draft_id.startswith("DRF-")
+    assert any(citation.doc_id == "tw-argodb" for citation in response.citations)
+    assert response.lead is not None
+    assert response.lead.lead_id.startswith("LEAD-")
 
 
 @pytest.mark.asyncio
-async def test_approve_creates_work_order() -> None:
-    response = await chat("X100 报 E-204，出水温度高。", "8F2-1042")
-    assert response.draft is not None
-    approved = await approve(response.draft.draft_id)
-    assert approved.work_order_id.startswith("WO-")
+async def test_approve_creates_crm_lead() -> None:
+    response = await chat(
+        "想申请 ArgoDB 试用，怎么联系？",
+        company="某企业",
+        industry="金融",
+        contact="demo@example.com",
+    )
+    assert response.lead is not None
+    approved = await approve(response.lead.lead_id)
+    assert approved.crm_lead_id.startswith("CRM-")
     assert approved.status in {"approved", "approved_local_fallback"}

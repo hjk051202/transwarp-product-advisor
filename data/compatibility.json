@@ -1,0 +1,13 @@
+{
+  "os": {
+    "麒麟": {"ArgoDB": "支持", "TDH": "支持", "TDC": "支持", "Sophon": "支持", "StellarDB": "支持", "KunDB": "支持"},
+    "统信": {"ArgoDB": "支持", "TDH": "支持", "TDC": "支持", "Sophon": "支持", "StellarDB": "支持", "KunDB": "支持"},
+    "CentOS": {"ArgoDB": "支持", "TDH": "支持", "TDC": "支持", "Sophon": "支持", "StellarDB": "支持", "KunDB": "支持"}
+  },
+  "cpu": {
+    "x86": {"ArgoDB": "支持", "TDH": "支持", "TDC": "支持", "Sophon": "支持", "StellarDB": "支持", "KunDB": "支持"},
+    "鲲鹏": {"ArgoDB": "支持", "TDH": "支持", "TDC": "支持", "Sophon": "支持", "StellarDB": "支持", "KunDB": "支持"},
+    "海光": {"ArgoDB": "支持", "TDH": "支持", "TDC": "支持", "Sophon": "支持", "StellarDB": "支持", "KunDB": "支持"}
+  },
+  "note": "以上为演示用兼容性摘要，具体版本、组合和认证以星环科技官方兼容性列表为准。"
+}

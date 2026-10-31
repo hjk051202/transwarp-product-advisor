@@ -9,12 +9,15 @@ from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
-    serial: str | None = None
+    company: str | None = None
+    industry: str | None = None
+    contact: str | None = None
 
 
 class Citation(BaseModel):
     doc_id: str
     title: str
+    product: str = ""
     section: str
     page: int | None = None
     version: str | None = None
@@ -27,15 +30,13 @@ class ToolTrace(BaseModel):
     result: Any = None
 
 
-class WorkOrderDraft(BaseModel):
-    draft_id: str
-    asset_id: str
-    title: str
-    description: str
-    priority: str
-    parts: list[str] = Field(default_factory=list)
-    safety: list[str] = Field(default_factory=list)
-    scheduled_at: str | None = None
+class LeadDraft(BaseModel):
+    lead_id: str
+    company: str
+    industry: str
+    contact: str
+    need: str
+    products: list[str] = Field(default_factory=list)
     status: str = "draft"
 
 
@@ -43,11 +44,11 @@ class ChatResponse(BaseModel):
     answer: str
     citations: list[Citation] = Field(default_factory=list)
     tool_trace: list[ToolTrace] = Field(default_factory=list)
-    draft: WorkOrderDraft | None = None
+    lead: LeadDraft | None = None
     mode: str = "offline"
 
 
 class ApproveResponse(BaseModel):
-    draft_id: str
-    work_order_id: str
+    lead_id: str
+    crm_lead_id: str
     status: str

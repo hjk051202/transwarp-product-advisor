@@ -1,39 +1,42 @@
-# 设备售后运维助手（FieldOps Copilot）
+# 星环产品选型助手（Transwarp Product Advisor）
 
-一个面向工业设备售后场景的 **LangChain + RAG + Tool Calling + MCP** 简历项目。
+一个面向星环科技产品售前场景的 **LangChain + RAG + Tool Calling + MCP** 简历项目。
 
-> 用户报修后，助手检索维修手册、读取实时工况、判断保修/备件，生成一份**待人工确认**的工单草稿；工程师批准后，通过 `cmms-mcp` 写入 CMMS。
+> 客户想买数据平台，但星环产品线多：ArgoDB、TDH、TDC、Sophon、StellarDB、KunDB……  
+> 助手根据行业、数据量、业务负载和国产化要求，查产品资料、做对比、找案例，最后生成一条**待人工确认**的售前线索。
 
-![status](https://img.shields.io/badge/status-v1.0-brightgreen)
-![python](https://img.shields.io/badge/python-3.12-blue)
-![langchain](https://img.shields.io/badge/langchain-1.4-1c3d5a)
-![license](https://img.shields.io/badge/license-MIT-green)
+> 说明：这是一个基于**公开产品资料**的演示项目，不代表星环科技真实内部系统、真实客户或真实报价。产品定位以星环科技官网为准。
 
 ---
 
-## v1.0 状态
+## 当前状态
 
-**v1.0 是一个功能完整的本地 Demo，不是生产认证版本。**
+**v1.0：可本地运行的端到端 Demo。**
 
 已实现：
 
-- **RAG**：9 份知识文档（6 Markdown + 3 PDF），Chroma 检索 + 关键词重排 + 页码引用
-- **Tool Calling**：5 个 LangChain 原生工具
-- **LangChain Agent**：`create_agent` 统一调度 RAG、原生工具、MCP 工具
-- **MCP**：`cmms-mcp` 暴露 `create_work_order` / `get_work_order`，Streamable HTTP 接入
-- **HITL**：Agent 只生成 draft；工程师批准后才写 CMMS
-- **FastAPI**：`/chat`、`/work-orders`、`/work-orders/{id}/approve`、`/audit`、`/health`
+- **RAG**：12 份知识文档（10 份 Markdown + 2 份 PDF），Chroma 检索 + 关键词/产品重排 + 页码引用
+- **Tool Calling**：6 个 LangChain 原生工具
+  - `search_knowledge`
+  - `list_products`
+  - `compare_products`
+  - `search_cases`
+  - `check_compatibility`
+  - `draft_lead`
+- **LangChain Agent**：`create_agent` 统一调度 RAG、产品工具和 MCP 工具
+- **MCP**：`crm-mcp` 暴露 `create_lead` / `get_lead`，Streamable HTTP 接入
+- **HITL**：Agent 只生成线索草稿；售前确认后才写入 CRM
+- **FastAPI**：`/chat`、`/leads`、`/leads/{id}/approve`、`/audit`、`/health`
 - **API Key 鉴权**：配置 `FIELDOPS_API_KEY` 后保护业务接口
-- **审计日志**：每次对话、审批都会记录 request_id、actor、action、resource、detail
-- **适配层**：CMMS 支持 `mcp / http / local`，ERP 支持 `json / http`
-- **Streamlit**：对话诊断、引用来源、工具轨迹、工单审批、技术栈说明
-- **本地一键启动**：`run.ps1` 拉起 MCP、API、UI 三个进程
+- **审计日志**：记录 request_id、actor、action、resource、detail
+- **适配层**：CRM 支持 `mcp / http / local`，产品目录支持 `json / http`
+- **Streamlit**：选型咨询、引用来源、工具轨迹、线索草稿、技术栈说明
 - **测试**：15 个 pytest 用例通过
 - **评测**：
-  - RAG 检索：15 条问题，Recall@4 = 15/15
-  - 端到端：20 条问题，citation/answer/draft 均 20/20，p50 = 35ms
+  - RAG：16 条问题，Recall@4 = 16/16
+  - 端到端：20 条问题，citation/answer/lead 均 20/20，p50 = 29ms
 
-> 没有模型 API Key 时，项目使用 `MockToolCallingModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
+> 没有模型 API Key 时，项目使用 `ProductAdvisorModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
 >
 > 真实模型路径已实现，但当前开发环境没有 API Key，未做真实模型端到端验证；评测数字来自离线 mock 路径。
 
@@ -41,26 +44,47 @@
 
 ## 这个项目解决什么问题
 
-工业设备售后有三个典型问题：
+星环产品线覆盖数据库、大数据平台、数据云、AI 平台、图数据库和交易数据库。售前常见问题是：
 
-1. **知识散**：维修手册、SOP、服务公告、历史工单分散，工程师查资料慢。
-2. **数据散**：设备实时工况在 IoT 平台，保修在 ERP，备件在另一个系统。
-3. **写操作有风险**：建单、订备件、派工都有真实成本，不能让模型直接执行。
+1. **产品多，客户不知道选哪个**：ArgoDB 还是 TDH？TDC 和 TDH 有什么区别？
+2. **资料散**：产品页、白皮书、案例、兼容性说明分散，查起来慢。
+3. **线索容易丢**：客户表达试用/报价意向后，没有及时转成 CRM 线索。
+4. **不能乱承诺**：价格、版本、兼容性必须谨慎，不能让模型直接编。
 
 对应到技术栈：
 
 | 技术 | 解决的实际问题 | 项目里的实现 |
 |---|---|---|
-| **LangChain** | 故障处理是多步流程，if/else 会越写越乱 | `create_agent` 统一调度 RAG、业务工具、MCP 工具 |
-| **RAG** | 手册长、版本多，模型直接答会编造故障码 | Chroma 检索 + 型号/版本/页码元数据 + 引用 |
-| **Tool Calling** | 设备当前温度、转速、保修、库存不在文档里 | 3 个查询工具 + 1 个草稿工具 + 1 个知识检索工具 |
-| **MCP** | CMMS 是外部系统，建单要认证、审计、复用 | `cmms-mcp` 暴露建单/查单；Streamable HTTP 接入 |
-| **HITL** | 建单、订备件有真实成本，误操作代价高 | Agent 只出 draft，工程师批准后才写 CMMS |
-| **审计** | 出问题要能追溯“谁在什么时候让 Agent 做了什么” | request_id + actor + action + resource + detail |
+| **LangChain** | 选型咨询是多步流程：问需求 → 查资料 → 对比 → 找案例 → 留资 | `create_agent` 统一调度工具 |
+| **RAG** | 产品资料、案例、兼容性散落，模型容易记错 | Chroma 检索 + 产品/章节/页码引用 |
+| **Tool Calling** | 产品对比、案例、兼容性不能靠模型记忆 | 6 个原生工具 |
+| **MCP** | CRM 是外部系统，留资要认证、审计、复用 | `crm-mcp` 暴露建线索/查线索 |
+| **HITL** | 线索写错会影响销售跟进 | Agent 只出 draft，售前确认后才写 CRM |
+| **审计** | 出问题要能追溯谁让 Agent 做了什么 | request_id + actor + action + resource + detail |
 
 一句话：
 
-> LangChain 管“流程怎么编排”，RAG 管“知识从哪来”，Tool Calling 管“实时数据怎么查”，MCP 管“外部系统怎么接”，HITL 管“写操作怎么不闯祸”。
+> LangChain 管“流程怎么编排”，RAG 管“产品资料从哪来”，Tool Calling 管“对比/案例/兼容性怎么查”，MCP 管“CRM 怎么接”，HITL 管“线索怎么写才不闯祸”。
+
+---
+
+## 产品范围
+
+| 产品 | 定位 | 典型场景 |
+|---|---|---|
+| **ArgoDB** | 分布式分析型数据库 / 湖仓集一体 | 数据仓库、BI 报表、实时分析、HTAP |
+| **TDH** | 一站式大数据基础平台 | 数据湖、多模分析、实时流、平台级数据底座 |
+| **TDC** | 云原生数据云平台 | 多租户数据云、数据 PaaS、平台运营 |
+| **Sophon** | 智能分析 / 数据科学平台 | 机器学习、知识图谱、边缘智能、隐私计算 |
+| **StellarDB** | 分布式图数据库 | 反欺诈、资金流向、集团派系、知识图谱 |
+| **KunDB** | 分布式交易型数据库 | 高并发 OLTP、核心交易、业务库国产化 |
+
+公开资料参考：
+
+- [ArgoDB 产品页](https://www.transwarp.cn/product/argodb)
+- [TDH 产品页](https://www.transwarp.cn/product/tdh)
+- [Sophon 产品页](https://www.transwarp.cn/product/sophon)
+- [StellarDB 产品页](https://www.transwarp.cn/product/stellardb)
 
 ---
 
@@ -69,42 +93,40 @@
 ```text
 ┌────────────────────────────────────┐
 │ Streamlit UI                       │
-│ 对话 / 引用 / 工具轨迹 / 工单审批    │
+│ 选型咨询 / 引用 / 工具轨迹 / 线索     │
 └───────────────┬────────────────────┘
                 │ HTTP + X-API-Key
 ┌───────────────▼────────────────────┐
 │ FastAPI                            │
-│ auth middleware / request_id       │
-│ /chat /work-orders /audit /health  │
+│ auth / request_id / audit          │
+│ /chat /leads /audit /health        │
 └───────────────┬────────────────────┘
                 │
 ┌───────────────▼────────────────────┐
 │ LangChain create_agent             │
-│ MockToolCallingModel / DeepSeek    │
+│ ProductAdvisorModel / DeepSeek     │
 └───┬──────────────┬─────────────┬───┘
     │              │             │
 ┌───▼────┐   ┌─────▼──────┐  ┌───▼─────────────┐
-│ Chroma │   │ ERPAdapter │  │ CMMSAdapter     │
+│ Chroma │   │ Catalog    │  │ CRMAdapter      │
 │ RAG    │   │ json/http  │  │ mcp/http/local  │
 └────────┘   └─────┬──────┘  └───┬─────────────┘
                    │             │
              ┌─────▼─────┐  ┌────▼──────────┐
-             │ devices   │  │ cmms-mcp      │
-             │ parts     │  │ create/get    │
-             │ telemetry │  └────┬──────────┘
+             │ products  │  │ crm-mcp       │
+             │ cases     │  │ create/get    │
+             │ compat    │  └────┬──────────┘
              └───────────┘       │
                             ┌────▼──────┐
                             │ SQLite    │
-                            │ audit +   │
-                            │ workorders│
+                            │ leads +   │
+                            │ audit     │
                             └───────────┘
 ```
 
 ---
 
 ## 快速开始
-
-### 方式一：本地运行
 
 ```bash
 python -m venv .venv
@@ -113,11 +135,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-启动 MCP Server：
+启动 CRM MCP Server：
 
 ```powershell
 $env:MCP_TRANSPORT = "streamable-http"
-python -m mcp_server.cmms_server
+python -m mcp_server.crm_server
 ```
 
 启动 FastAPI：
@@ -145,16 +167,16 @@ streamlit run app.py
 输入：
 
 ```text
-X100 报 E-204，出水温度高，客户已停机。
+我们是城商行，TB 级数据，主要做报表和风控分析，ArgoDB 和 TDH 怎么选？
 ```
 
 然后：
 
-1. 查看诊断、工况、保修、备件和引用
-2. 左侧切到 **工单草稿**
-3. 审核后点击 **批准并创建工单**
-4. 工单通过 `cmms-mcp.create_work_order` 写入 SQLite，返回 `WO-...`
-5. 左侧 **技术栈** 查看每项技术解决的实际问题
+1. 查看选型建议、产品对比、金融案例和引用
+2. 左侧切到 **线索草稿**
+3. 核对客户、行业、需求和推荐产品
+4. 点击 **批准并写入 CRM**
+5. 通过 `crm-mcp.create_lead` 写入 SQLite，返回 `CRM-...`
 
 ---
 
@@ -166,11 +188,11 @@ X100 报 E-204，出水温度高，客户已停机。
 | `DEEPSEEK_MODEL` | `deepseek-chat` | 模型名 |
 | `OPENAI_API_KEY` | 空 | 使用 OpenAI 真实模型 |
 | `FIELDOPS_API_KEY` | 空 | 设置后启用 API Key 鉴权 |
-| `CMMS_MCP_URL` | `http://127.0.0.1:8765/mcp` | MCP 地址 |
-| `CMMS_ADAPTER` | `mcp` | `mcp` / `http` / `local` |
-| `CMMS_HTTP_URL` | `http://127.0.0.1:9000` | 真实 CMMS REST 地址 |
-| `ERP_ADAPTER` | `json` | `json` / `http` |
-| `ERP_HTTP_URL` | `http://127.0.0.1:9100` | 真实 ERP/IoT 地址 |
+| `CRM_MCP_URL` | `http://127.0.0.1:8765/mcp` | MCP 地址 |
+| `CRM_ADAPTER` | `mcp` | `mcp` / `http` / `local` |
+| `CRM_HTTP_URL` | `http://127.0.0.1:9000` | 真实 CRM REST 地址 |
+| `CATALOG_ADAPTER` | `json` | `json` / `http` |
+| `CATALOG_HTTP_URL` | `http://127.0.0.1:9100` | 真实产品目录地址 |
 | `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8765` | MCP 监听地址 |
 
 真实模型：
@@ -187,10 +209,10 @@ uvicorn fieldops.main:app --port 8000
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | `GET` | `/health` | 模式、MCP 工具、鉴权状态 |
-| `POST` | `/chat` | 诊断对话，返回 answer / citations / tool_trace / draft |
-| `GET` | `/work-orders` | 最近的工单草稿 |
-| `GET` | `/work-orders/{draft_id}` | 查询工单草稿 |
-| `POST` | `/work-orders/{draft_id}/approve` | 人工批准后通过 CMMS 适配器建单 |
+| `POST` | `/chat` | 选型咨询，返回 answer / citations / tool_trace / lead |
+| `GET` | `/leads` | 最近的线索草稿 |
+| `GET` | `/leads/{lead_id}` | 查询线索草稿 |
+| `POST` | `/leads/{lead_id}/approve` | 人工确认后通过 CRM 适配器写线索 |
 | `GET` | `/audit` | 最近审计日志 |
 
 启用鉴权后，除 `/health`、`/docs`、`/openapi.json` 外都需要：
@@ -211,7 +233,7 @@ Authorization: Bearer change-me
 curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
   -H "X-API-Key: change-me" \
-  -d '{"message":"X100 报 E-204，出水温度高","serial":"8F2-1042"}'
+  -d '{"message":"ArgoDB 和 TDH 怎么选？","company":"某城商行","industry":"金融"}'
 ```
 
 ---
@@ -227,8 +249,8 @@ python eval/run_eval.py
 当前：
 
 ```text
-Recall@4 (doc)  = 15/15 = 100.00%
-Page hit@4      = 15/15 = 100.00%
+Recall@4 (doc)  = 16/16 = 100.00%
+Page hit@4      = 16/16 = 100.00%
 ```
 
 ### 端到端
@@ -242,12 +264,12 @@ python eval/run_e2e.py
 ```text
 citation_hit@4  = 20/20 = 100.00%
 answer_keyword  = 20/20 = 100.00%
-draft_expect    = 20/20 = 100.00%
-p50 latency     = 35 ms
-p95 latency     = 90 ms
+lead_expect     = 20/20 = 100.00%
+p50 latency     = 29 ms
+p95 latency     = 61 ms
 ```
 
-**说明**：这是 9 篇文档、20 条问题的**小型合成评测**，100% 只能证明链路可用，不能说明真实场景的泛化能力。面试时要主动说明语料规模和 mock 模型限制。
+**说明**：这是 12 篇文档、20 条问题的**小型合成评测**，100% 只能证明链路可用，不能说明真实售前场景的泛化能力。面试时要主动说明语料规模和 mock 模型限制。
 
 ### 测试
 
@@ -255,7 +277,7 @@ p95 latency     = 90 ms
 pytest -q
 ```
 
-当前：`15 passed`。
+当前：`15 passed`（启动 CRM MCP 时）；未启动 CRM MCP 时为 `14 passed, 1 skipped`。
 
 ---
 
@@ -267,27 +289,27 @@ fieldops-copilot/
 ├─ fieldops/
 │  ├─ main.py                   # FastAPI + auth middleware
 │  ├─ agent.py                  # create_agent + 模型选择
-│  ├─ mock_llm.py               # 无 API Key 时的确定性工具调用
-│  ├─ rag.py                    # Chroma + 哈希 embedding + PDF/Markdown 索引
-│  ├─ ingest.py                 # 预留的批量入库入口
-│  ├─ tools.py                  # 5 个原生工具
+│  ├─ mock_llm.py               # 无 API Key 时的确定性产品顾问模型
+│  ├─ rag.py                    # Chroma + 哈希 embedding + 产品文档引用
+│  ├─ ingest.py                 # 语料统计与索引重建
+│  ├─ tools.py                  # 6 个产品选型工具
 │  ├─ mcp_client.py             # langchain-mcp-adapters
-│  ├─ service.py                # 对话编排 / 审批 / 审计
+│  ├─ service.py                # 对话编排 / 线索审批 / 审计
 │  ├─ audit.py                  # request_id + audit log
-│  ├─ db.py                     # SQLite：work_orders + audit_log
+│  ├─ db.py                     # SQLite：leads + audit_log
 │  ├─ integrations/
-│  │  ├─ cmms.py                # mcp / http / local 适配器
-│  │  └─ erp.py                 # json / http 适配器
-│  ├─ data.py                   # Markdown + PDF 数据访问
+│  │  ├─ crm.py                 # mcp / http / local CRM 适配器
+│  │  └─ catalog.py             # json / http 产品目录适配器
+│  ├─ data.py                   # 产品/案例/兼容性/知识库读取
 │  └─ schemas.py                # Pydantic
 ├─ mcp_server/
-│  └─ cmms_server.py            # FastMCP：create/get work order
+│  └─ crm_server.py             # FastMCP：create/get lead
 ├─ data/
-│  ├─ manuals/                  # 6 份 Markdown
-│  ├─ manuals/pdf/              # 3 份 PDF
-│  ├─ devices.json
-│  ├─ parts.json
-│  └─ telemetry.json
+│  ├─ knowledge/                # 10 份产品/选型/案例 Markdown
+│  ├─ knowledge/pdf/            # 2 份 PDF
+│  ├─ products.json
+│  ├─ cases.json
+│  └─ compatibility.json
 ├─ scripts/
 │  └─ generate_pdfs.py          # 生成演示 PDF
 ├─ eval/
@@ -307,21 +329,21 @@ fieldops-copilot/
 ## 安全与边界
 
 - 默认 `FIELDOPS_API_KEY` 为空时鉴权关闭，仅适合本地开发。
-- 生产环境应把 API Key 放在 Secret Manager，不要提交到 Git。
+- 产品资料来自公开页面并做了摘要，具体版本、价格、兼容性以星环科技官方资料为准。
+- 演示数据中的客户名称均为匿名化/虚构，不代表真实客户。
 - 审计日志会记录消息前 160 字；生产环境应做 PII 脱敏。
-- `HttpCMMSAdapter` / `HttpERPAdapter` 是适配器骨架，未对接真实 CMMS/ERP。
-- 当前 PDF 为 ASCII 示例，中文扫描件需要 OCR（PaddleOCR/Tesseract）。
+- `HttpCRMAdapter` / `HttpCatalogAdapter` 是适配器骨架，未对接真实 CRM/产品目录。
 - 真实模型路径未验证；离线 mock 模型只覆盖预设场景。
 
 ---
 
 ## 简历写法
 
-**设备售后运维助手｜LangChain + RAG + Tool Calling + MCP｜个人项目**
+**星环产品选型助手｜LangChain + RAG + Tool Calling + MCP｜个人项目**
 
-- 基于 LangChain 1.x `create_agent` 构建设备售后诊断 Agent，统一调度 Chroma RAG、5 个业务工具和 1 个 MCP Server，完成从故障描述到工单草稿的闭环。
-- 设计 Markdown/PDF 混合知识入库链路，按标题切分并保留型号、版本、页码元数据；15 条检索评测 Recall@4 为 15/15，20 条端到端评测 citation/answer/draft 均 20/20。
-- 将 CMMS 封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露建单/查单；抽象 `mcp/http/local` 三种 CMMS 适配器，写操作经人工确认后执行。
+- 基于 LangChain 1.x `create_agent` 构建星环产品选型 Agent，统一调度 Chroma RAG、6 个产品工具和 1 个 CRM MCP Server，完成“需求澄清 → 产品对比 → 案例/兼容性 → 线索草稿”的闭环。
+- 设计产品资料 RAG 链路，按章节切分并保留产品、版本、页码元数据；16 条检索评测 Recall@4 为 16/16，20 条端到端评测 citation/answer/lead 均 20/20。
+- 将 CRM 封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露建线索/查线索；抽象 `mcp/http/local` 三种 CRM 适配器，写操作经人工确认后执行。
 - 使用 FastAPI + Streamlit 实现前后端分离 Demo，加入 API Key 鉴权、request_id 审计日志；15 个 pytest 用例覆盖 RAG、工具、MCP、鉴权、审计与适配器。
 
 > 指标请写你实测的数字；当前评测是小样本合成集，面试时主动说明语料规模和 mock 模型限制。
@@ -330,18 +352,18 @@ fieldops-copilot/
 
 ## Roadmap
 
-- [x] v0.1：Streamlit UI + Mock 业务流程
-- [x] v0.2：Chroma RAG + 5 个 tools + LangChain Agent + `cmms-mcp` + FastAPI
+- [x] v0.1：Streamlit UI + Mock 流程
+- [x] v0.2：Chroma RAG + 产品工具 + LangChain Agent + CRM MCP
 - [x] v1.0：PDF 入库 + 20 条端到端评测 + 鉴权/审计 + 适配层
 - [ ] v1.1：真实模型端到端评测
-- [ ] v1.2：中文 PDF/OCR + 50+ 份真实风格手册
-- [ ] v1.3：真实 CMMS/ERP 对接、SSO、可观测性
+- [ ] v1.2：接入真实产品目录/CRM API
+- [ ] v1.3：多语言、权限分级、可观测性
 
 ---
 
 ## 数据说明
 
-所有设备、故障码、工单、库存均为**虚构演示数据**，不对应任何真实厂商或客户。PDF 为脚本生成的 ASCII 示例，仅用于验证入库链路。
+产品资料来自星环科技公开页面，经过摘要和改写用于演示；客户、案例、兼容性均为匿名化/演示数据，不代表真实合同、报价或承诺。
 
 ---
 

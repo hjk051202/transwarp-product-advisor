@@ -12,7 +12,7 @@ def test_api_key_required(monkeypatch) -> None:
         assert client.post("/chat", json={"message": "hello"}).status_code == 401
         response = client.post(
             "/chat",
-            json={"message": "X100 报 E-204，出水温度高。", "serial": "8F2-1042"},
+            json={"message": "ArgoDB 和 TDH 怎么选？", "company": "某银行", "industry": "金融"},
             headers={"X-API-Key": "test-secret"},
         )
         assert response.status_code == 200
@@ -23,7 +23,7 @@ def test_audit_log_written() -> None:
     with TestClient(app) as client:
         client.post(
             "/chat",
-            json={"message": "SN 8F2-1042 还在保修吗？", "serial": "8F2-1042"},
+            json={"message": "ArgoDB 支持 HTAP 吗？", "company": "某客户", "industry": "金融"},
             headers={"X-User": "pytest"},
         )
         logs = client.get("/audit?limit=10")

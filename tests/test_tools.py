@@ -2,34 +2,49 @@ from __future__ import annotations
 
 import json
 
-from fieldops.tools import check_parts, check_warranty, draft_work_order, get_telemetry
+from fieldops.tools import (
+    check_compatibility,
+    compare_products,
+    draft_lead,
+    list_products,
+    search_cases,
+)
 
 
-def test_telemetry_tool() -> None:
-    data = json.loads(get_telemetry.invoke({"asset_id": "8F2-1042", "minutes": 30}))
-    assert data["latest"]["fan_rpm"] == 0
-    assert data["latest"]["error_code"] == "E-204"
+def test_list_and_compare_products() -> None:
+    products = json.loads(list_products.invoke({"workload": "报表"}))
+    assert any(item["product"] == "ArgoDB" for item in products)
+
+    comparison = json.loads(
+        compare_products.invoke({"product_a": "ArgoDB", "product_b": "TDH"})
+    )
+    assert comparison["product_a"]["product"] == "ArgoDB"
+    assert comparison["product_b"]["product"] == "TDH"
 
 
-def test_warranty_and_parts_tools() -> None:
-    warranty = json.loads(check_warranty.invoke({"serial": "8F2-1042"}))
-    assert warranty["warranty"] == "在保"
+def test_cases_and_compatibility() -> None:
+    cases = json.loads(search_cases.invoke({"industry": "金融"}))
+    assert cases["count"] >= 1
 
-    parts = json.loads(check_parts.invoke({"part_no": "FAN-12038", "region": "上海"}))
-    assert parts["stock"] == 3
+    compat = json.loads(
+        check_compatibility.invoke({"os_name": "麒麟", "cpu": "鲲鹏"})
+    )
+    assert compat["os_support"]
+    assert compat["cpu_support"]
 
 
-def test_draft_tool_creates_draft() -> None:
-    draft = json.loads(
-        draft_work_order.invoke(
+def test_draft_lead_tool() -> None:
+    lead = json.loads(
+        draft_lead.invoke(
             {
-                "asset_id": "8F2-1042",
-                "title": "pytest draft",
-                "description": "test",
-                "parts": ["FAN-12038"],
+                "company": "pytest 银行",
+                "industry": "金融",
+                "contact": "pytest@example.com",
+                "need": "ArgoDB 选型",
+                "products": ["ArgoDB"],
             }
         )
     )
-    assert draft["draft_id"].startswith("DRF-")
-    assert draft["status"] == "draft"
-    assert draft["parts"] == ["FAN-12038"]
+    assert lead["lead_id"].startswith("LEAD-")
+    assert lead["status"] == "draft"
+    assert lead["products"] == ["ArgoDB"]
