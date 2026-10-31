@@ -1,4 +1,4 @@
-"""SQLite persistence for leads and audit logs."""
+"""SQLite persistence for conversation history and audit logs."""
 
 from __future__ import annotations
 
@@ -28,17 +28,15 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
     with connect(db_path) as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS leads (
-                lead_id TEXT PRIMARY KEY,
-                crm_lead_id TEXT,
-                company TEXT NOT NULL,
-                industry TEXT NOT NULL,
-                contact TEXT NOT NULL,
-                need TEXT NOT NULL,
-                products_json TEXT NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                approved_at TEXT
+            CREATE TABLE IF NOT EXISTS conversations (
+                conversation_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                user_message TEXT NOT NULL,
+                assistant_message TEXT NOT NULL,
+                citations_json TEXT NOT NULL,
+                tool_trace_json TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                created_at TEXT NOT NULL
             )
             """
         )
@@ -58,15 +56,15 @@ def init_db(db_path: Path | str = DB_PATH) -> None:
         conn.commit()
 
 
-def create_lead(
+def create_conversation(
     *,
-    lead_id: str,
-    company: str,
-    industry: str,
-    contact: str,
-    need: str,
-    products: list[str],
-    status: str = "draft",
+    conversation_id: str,
+    session_id: str,
+    user_message: str,
+    assistant_message: str,
+    citations: list[dict[str, Any]],
+    tool_trace: list[dict[str, Any]],
+    mode: str,
     db_path: Path | str = DB_PATH,
 ) -> dict[str, Any]:
     init_db(db_path)
@@ -74,67 +72,53 @@ def create_lead(
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO leads
-            (lead_id, crm_lead_id, company, industry, contact, need,
-             products_json, status, created_at, approved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO conversations
+            (conversation_id, session_id, user_message, assistant_message,
+             citations_json, tool_trace_json, mode, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                lead_id,
-                None,
-                company,
-                industry,
-                contact,
-                need,
-                json.dumps(products, ensure_ascii=False),
-                status,
+                conversation_id,
+                session_id,
+                user_message,
+                assistant_message,
+                json.dumps(citations, ensure_ascii=False),
+                json.dumps(tool_trace, ensure_ascii=False),
+                mode,
                 now,
-                None,
             ),
         )
         conn.commit()
-    return get_lead(lead_id, db_path=db_path)  # type: ignore[return-value]
+    return get_conversation(conversation_id, db_path=db_path)  # type: ignore[return-value]
 
 
-def get_lead(lead_id: str, db_path: Path | str = DB_PATH) -> dict[str, Any] | None:
-    with connect(db_path) as conn:
-        row = conn.execute("SELECT * FROM leads WHERE lead_id = ?", (lead_id,)).fetchone()
-    return _row_to_dict(row)
-
-
-def list_leads(db_path: Path | str = DB_PATH) -> list[dict[str, Any]]:
-    with connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT * FROM leads ORDER BY created_at DESC LIMIT 30"
-        ).fetchall()
-    return [_row_to_dict(row) for row in rows if row is not None]
-
-
-def approve_lead(
-    lead_id: str, crm_lead_id: str, db_path: Path | str = DB_PATH
-) -> dict[str, Any] | None:
-    now = datetime.now(timezone.utc).isoformat()
-    with connect(db_path) as conn:
-        conn.execute(
-            """
-            UPDATE leads
-            SET status = 'approved', crm_lead_id = ?, approved_at = ?
-            WHERE lead_id = ? AND status = 'draft'
-            """,
-            (crm_lead_id, now, lead_id),
-        )
-        conn.commit()
-    return get_lead(lead_id, db_path=db_path)
-
-
-def get_by_crm_lead_id(
-    crm_lead_id: str, db_path: Path | str = DB_PATH
+def get_conversation(
+    conversation_id: str, db_path: Path | str = DB_PATH
 ) -> dict[str, Any] | None:
     with connect(db_path) as conn:
         row = conn.execute(
-            "SELECT * FROM leads WHERE crm_lead_id = ?", (crm_lead_id,)
+            "SELECT * FROM conversations WHERE conversation_id = ?",
+            (conversation_id,),
         ).fetchone()
     return _row_to_dict(row)
+
+
+def list_conversations(
+    limit: int = 20, session_id: str | None = None, db_path: Path | str = DB_PATH
+) -> list[dict[str, Any]]:
+    init_db(db_path)
+    with connect(db_path) as conn:
+        if session_id:
+            rows = conn.execute(
+                "SELECT * FROM conversations WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM conversations ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return [_row_to_dict(row) for row in rows if row is not None]
 
 
 def log_audit(
@@ -184,5 +168,6 @@ def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     data = dict(row)
-    data["products"] = json.loads(data.pop("products_json"))
+    data["citations"] = json.loads(data.pop("citations_json"))
+    data["tool_trace"] = json.loads(data.pop("tool_trace_json"))
     return data

@@ -1,28 +1,20 @@
-"""Application service: product-advisor chat and lead approval."""
+"""Application service: product-advisor chat and conversation persistence."""
 
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from fieldops import audit
 from fieldops.agent import get_agent
 from fieldops.data import list_products, search_cases
-from fieldops.db import create_lead, get_lead, list_leads
-from fieldops.integrations import build_crm_adapter
+from fieldops.integrations import build_history_adapter
 from fieldops.rag import search
-from fieldops.schemas import (
-    ApproveResponse,
-    ChatResponse,
-    Citation,
-    LeadDraft,
-    ToolTrace,
-)
-
-BUY_TERMS = ["选型", "怎么选", "试用", "报价", "方案", "联系", "咨询", "采购", "落地", "POC"]
+from fieldops.schemas import ChatResponse, Citation, ToolTrace
 
 
 def _content_text(content: Any) -> str:
@@ -48,13 +40,10 @@ def _payload(message: ToolMessage) -> dict[str, Any]:
         return {"result": content}
 
 
-def _extract(
-    result: dict[str, Any],
-) -> tuple[str, list[Citation], list[ToolTrace], LeadDraft | None]:
+def _extract(result: dict[str, Any]) -> tuple[str, list[Citation], list[ToolTrace]]:
     messages = result.get("messages", [])
     citations: list[Citation] = []
     traces: list[ToolTrace] = []
-    lead: LeadDraft | None = None
     call_args: dict[str, dict[str, Any]] = {}
 
     for message in messages:
@@ -86,20 +75,16 @@ def _extract(
                         snippet=str(item.get("snippet", ""))[:700],
                     )
                 )
-        elif message.name == "draft_lead" and payload.get("lead_id"):
-            lead = LeadDraft(**payload)
 
     final = ""
     for message in reversed(messages):
         if isinstance(message, AIMessage) and message.content:
             final = _content_text(message.content)
             break
-    return final, citations, traces, lead
+    return final, citations, traces
 
 
-def _fallback_advice(
-    message: str, company: str, industry: str, contact: str
-) -> ChatResponse:
+def _fallback_advice(message: str, industry: str) -> tuple[str, list[Citation], list[ToolTrace]]:
     docs = search(message[:200], k=4)
     products = list_products()
     cases = search_cases(industry=industry) if industry else []
@@ -116,7 +101,7 @@ def _fallback_advice(
         for doc in docs
     ]
 
-    lines = ["### 需求判断", "根据你的描述，先从产品定位和适用场景做初步判断。"]
+    lines = ["### 需求判断", "先根据你的描述做初步判断。"]
     if products:
         lines.append("\n### 可选产品")
         for product in products[:6]:
@@ -131,113 +116,75 @@ def _fallback_advice(
         lines.append("\n### 依据")
         for doc in docs[:4]:
             lines.append(f"- {doc.title} {doc.section}（{doc.doc_id}）")
-
-    lead = None
-    if any(term in message for term in BUY_TERMS):
-        lead_id = f"LEAD-{datetime.now():%Y%m%d%H%M%S}-fallback"
-        payload = create_lead(
-            lead_id=lead_id,
-            company=company or "某企业客户",
-            industry=industry or "待补充",
-            contact=contact or "待补充",
-            need=message[:300],
-            products=[product["key"] for product in products[:2]],
-        )
-        lead = LeadDraft(**payload)
-        lines.append("\n> 已生成线索草稿，请在「线索草稿」确认后写入 CRM。")
-
-    return ChatResponse(
-        answer="\n".join(lines),
-        citations=citations,
-        tool_trace=[ToolTrace(name="fallback_advice", result={"docs": len(docs)})],
-        lead=lead,
-        mode="offline-fallback",
-    )
+    return "\n".join(lines), citations, [ToolTrace(name="fallback_advice")]
 
 
 async def chat(
     message: str,
+    session_id: str | None = None,
     company: str | None = None,
     industry: str | None = None,
-    contact: str | None = None,
 ) -> ChatResponse:
-    company = company or "某企业客户"
-    industry = industry or ""
-    contact = contact or "待补充"
+    session_id = session_id or f"SESS-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
     prompt = (
         f"{message}\n\n"
-        f"客户公司：{company}\n"
-        f"行业：{industry or '未提供'}\n"
-        f"联系方式：{contact}"
+        f"客户公司：{company or '未提供'}\n"
+        f"行业：{industry or '未提供'}"
     )
     error = ""
     try:
         agent, mode = await get_agent()
         result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
-        answer, citations, traces, lead = _extract(result)
+        answer, citations, traces = _extract(result)
         if not answer:
-            response = _fallback_advice(message, company, industry, contact)
-        else:
-            response = ChatResponse(
-                answer=answer,
-                citations=citations,
-                tool_trace=traces,
-                lead=lead,
-                mode=mode,
-            )
+            answer, citations, traces = _fallback_advice(message, industry or "")
+            mode = "offline-fallback"
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
-        response = _fallback_advice(message, company, industry, contact)
+        answer, citations, traces = _fallback_advice(message, industry or "")
+        mode = "offline-fallback"
+
+    conversation_id = ""
+    try:
+        saved = await build_history_adapter().save_conversation(
+            {
+                "session_id": session_id,
+                "user_message": message,
+                "assistant_message": answer,
+                "citations": [item.model_dump() for item in citations],
+                "tool_trace": [item.model_dump() for item in traces],
+                "mode": mode,
+            }
+        )
+        conversation_id = str(saved.get("conversation_id", ""))
+    except Exception as exc:
+        error = f"{error}; history_save: {type(exc).__name__}: {exc}".strip("; ")
 
     audit.log(
         "chat.request",
-        resource=f"company:{company}",
+        resource=f"session:{session_id}",
         detail={
             "message": message[:160],
-            "industry": industry,
-            "mode": response.mode,
-            "citations": len(response.citations),
-            "tools": [trace.name for trace in response.tool_trace],
-            "lead_id": response.lead.lead_id if response.lead else None,
+            "industry": industry or "",
+            "mode": mode,
+            "citations": len(citations),
+            "tools": [trace.name for trace in traces],
+            "conversation_id": conversation_id,
             "error": error,
         },
     )
-    return response
-
-
-async def approve(lead_id: str) -> ApproveResponse:
-    lead = get_lead(lead_id)
-    if not lead:
-        audit.log("lead.approve", resource=lead_id, detail={"status": "not_found"})
-        raise ValueError(f"lead {lead_id} not found")
-    if lead.get("status") == "approved" and lead.get("crm_lead_id"):
-        audit.log(
-            "lead.approve",
-            resource=lead_id,
-            detail={"status": "already_approved", "crm_lead_id": lead["crm_lead_id"]},
-        )
-        return ApproveResponse(
-            lead_id=lead_id,
-            crm_lead_id=lead["crm_lead_id"],
-            status="approved",
-        )
-
-    result = await build_crm_adapter().create_lead(lead)
-    crm_lead_id = result.get("crm_lead_id")
-    if not crm_lead_id:
-        audit.log("lead.approve", resource=lead_id, detail={"status": "failed"})
-        raise ValueError("CRM did not return a crm_lead_id")
-    audit.log(
-        "lead.approve",
-        resource=lead_id,
-        detail={"status": result.get("status"), "crm_lead_id": crm_lead_id},
-    )
-    return ApproveResponse(
-        lead_id=lead_id,
-        crm_lead_id=crm_lead_id,
-        status=str(result.get("status", "approved")),
+    return ChatResponse(
+        answer=answer,
+        citations=citations,
+        tool_trace=traces,
+        conversation_id=conversation_id,
+        mode=mode,
     )
 
 
-def leads() -> list[dict[str, Any]]:
-    return list_leads()
+async def list_history(limit: int = 20) -> list[dict[str, Any]]:
+    return await build_history_adapter().list_conversations(limit=limit)
+
+
+async def get_history(conversation_id: str) -> dict[str, Any] | None:
+    return await build_history_adapter().get_conversation(conversation_id)

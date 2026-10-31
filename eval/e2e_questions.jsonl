@@ -1,20 +1,20 @@
-{"id": "e01", "question": "我们是城商行，TB 级数据，做报表和风控，ArgoDB 和 TDH 怎么选？", "company": "某城商行", "industry": "金融", "contact": "demo@example.com", "expected_doc": "tw-argodb", "expect_lead": true, "keywords": ["ArgoDB", "TDH"]}
-{"id": "e02", "question": "政务客户想建数据湖，TDH 和 TDC 怎么选？", "company": "某政务云", "industry": "政务", "contact": "gov@example.com", "expected_doc": "tw-tdh", "expect_lead": true, "keywords": ["TDH", "TDC"]}
-{"id": "e03", "question": "金融反欺诈，StellarDB 能做吗？", "company": "某银行", "industry": "金融", "contact": "bank@example.com", "expected_doc": "tw-stellardb", "expect_lead": false, "keywords": ["StellarDB", "反欺诈"]}
-{"id": "e04", "question": "制造企业想做知识图谱和故障预测，Sophon 和 StellarDB 怎么选？", "company": "某制造集团", "industry": "制造", "contact": "mfg@example.com", "expected_doc": "tw-sophon", "expect_lead": true, "keywords": ["Sophon", "StellarDB"]}
-{"id": "e05", "question": "我们要求麒麟 + 鲲鹏国产化，ArgoDB 支持吗？", "company": "某能源集团", "industry": "能源", "contact": "energy@example.com", "expected_doc": "tw-compatibility", "expect_lead": false, "keywords": ["麒麟", "鲲鹏"]}
-{"id": "e06", "question": "星环有哪些产品？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": null, "expect_lead": false, "keywords": ["ArgoDB", "TDH"]}
-{"id": "e07", "question": "金融行业有数据仓库案例吗？", "company": "某银行", "industry": "金融", "contact": "bank@example.com", "expected_doc": "tw-finance-cases", "expect_lead": false, "keywords": ["数据仓库", "金融"]}
-{"id": "e08", "question": "ArgoDB 支持 HTAP 吗？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-argodb", "expect_lead": false, "keywords": ["HTAP"]}
-{"id": "e09", "question": "TDH 支持多少种存储模型？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-tdh", "expect_lead": false, "keywords": ["11"]}
-{"id": "e10", "question": "KunDB 适合高并发交易吗？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-kundb", "expect_lead": false, "keywords": ["OLTP", "交易"]}
-{"id": "e11", "question": "TDC 多租户怎么隔离资源？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-tdc", "expect_lead": false, "keywords": ["多租户", "隔离"]}
-{"id": "e12", "question": "Sophon 包含哪些子产品？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-sophon", "expect_lead": false, "keywords": ["Sophon Base", "Sophon KG"]}
-{"id": "e13", "question": "想申请 ArgoDB 试用，怎么联系？", "company": "某企业", "industry": "金融", "contact": "demo@example.com", "expected_doc": "tw-argodb", "expect_lead": true, "keywords": ["试用", "联系"]}
-{"id": "e14", "question": "ArgoDB 和 TDH 的报价和 POC 怎么安排？", "company": "某集团", "industry": "金融", "contact": "demo@example.com", "expected_doc": null, "expect_lead": true, "keywords": ["报价", "POC"]}
-{"id": "e15", "question": "政务行业 TDH 有哪些案例？", "company": "某政务云", "industry": "政务", "contact": "gov@example.com", "expected_doc": "tw-finance-cases", "expect_lead": false, "keywords": ["政务", "TDH"]}
-{"id": "e16", "question": "我们想把 Teradata 迁移到 ArgoDB，能做吗？", "company": "某银行", "industry": "金融", "contact": "bank@example.com", "expected_doc": "tw-argodb", "expect_lead": false, "keywords": ["迁移", "ArgoDB"]}
-{"id": "e17", "question": "StellarDB 支持多少层关系查询？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-stellardb", "expect_lead": false, "keywords": ["10"]}
-{"id": "e18", "question": "Sophon 的隐私计算子产品叫什么？", "company": "某客户", "industry": "", "contact": "demo@example.com", "expected_doc": "tw-sophon", "expect_lead": false, "keywords": ["P²C"]}
-{"id": "e19", "question": "TDC 和 ArgoDB 怎么组合？", "company": "某集团", "industry": "金融", "contact": "demo@example.com", "expected_doc": "tw-selection-guide", "expect_lead": false, "keywords": ["TDC", "ArgoDB"]}
-{"id": "e20", "question": "我们是制造企业，想选型 TDH + StellarDB + Sophon，怎么联系？", "company": "某制造集团", "industry": "制造", "contact": "mfg@example.com", "expected_doc": "tw-selection-guide", "expect_lead": true, "keywords": ["TDH", "StellarDB", "Sophon"]}
+{"id": "e01", "question": "我们是城商行，TB 级数据，做报表和风控，ArgoDB 和 TDH 怎么选？", "company": "某城商行", "industry": "金融", "expected_doc": "tw-argodb", "keywords": ["ArgoDB", "TDH"]}
+{"id": "e02", "question": "政务客户想建数据湖，TDH 和 TDC 怎么选？", "company": "某政务云", "industry": "政务", "expected_doc": "tw-tdh", "keywords": ["TDH", "TDC"]}
+{"id": "e03", "question": "金融反欺诈，StellarDB 能做吗？", "company": "某银行", "industry": "金融", "expected_doc": "tw-stellardb", "keywords": ["StellarDB", "反欺诈"]}
+{"id": "e04", "question": "制造企业想做知识图谱和故障预测，Sophon 和 StellarDB 怎么选？", "company": "某制造集团", "industry": "制造", "expected_doc": "tw-sophon", "keywords": ["Sophon", "StellarDB"]}
+{"id": "e05", "question": "我们要求麒麟 + 鲲鹏国产化，ArgoDB 支持吗？", "company": "某能源集团", "industry": "能源", "expected_doc": "tw-compatibility", "keywords": ["麒麟", "鲲鹏"]}
+{"id": "e06", "question": "星环有哪些产品？", "company": "某客户", "industry": "", "expected_doc": null, "keywords": ["ArgoDB", "TDH"]}
+{"id": "e07", "question": "金融行业有数据仓库案例吗？", "company": "某银行", "industry": "金融", "expected_doc": "tw-finance-cases", "keywords": ["数据仓库", "金融"]}
+{"id": "e08", "question": "ArgoDB 支持 HTAP 吗？", "company": "某客户", "industry": "", "expected_doc": "tw-argodb", "keywords": ["HTAP"]}
+{"id": "e09", "question": "TDH 支持多少种存储模型？", "company": "某客户", "industry": "", "expected_doc": "tw-tdh", "keywords": ["11"]}
+{"id": "e10", "question": "KunDB 适合高并发交易吗？", "company": "某客户", "industry": "", "expected_doc": "tw-kundb", "keywords": ["OLTP", "交易"]}
+{"id": "e11", "question": "TDC 多租户怎么隔离资源？", "company": "某客户", "industry": "", "expected_doc": "tw-tdc", "keywords": ["多租户", "隔离"]}
+{"id": "e12", "question": "Sophon 包含哪些子产品？", "company": "某客户", "industry": "", "expected_doc": "tw-sophon", "keywords": ["Sophon Base", "Sophon KG"]}
+{"id": "e13", "question": "想申请 ArgoDB 试用，怎么联系？", "company": "某企业", "industry": "金融", "expected_doc": "tw-argodb", "keywords": ["试用", "联系"]}
+{"id": "e14", "question": "ArgoDB 和 TDH 的报价和 POC 怎么安排？", "company": "某集团", "industry": "金融", "expected_doc": null, "keywords": ["报价", "POC"]}
+{"id": "e15", "question": "政务行业 TDH 有哪些案例？", "company": "某政务云", "industry": "政务", "expected_doc": "tw-finance-cases", "keywords": ["政务", "TDH"]}
+{"id": "e16", "question": "我们想把 Teradata 迁移到 ArgoDB，能做吗？", "company": "某银行", "industry": "金融", "expected_doc": "tw-argodb", "keywords": ["迁移", "ArgoDB"]}
+{"id": "e17", "question": "StellarDB 支持多少层关系查询？", "company": "某客户", "industry": "", "expected_doc": "tw-stellardb", "keywords": ["10"]}
+{"id": "e18", "question": "Sophon 的隐私计算子产品叫什么？", "company": "某客户", "industry": "", "expected_doc": "tw-sophon", "keywords": ["P²C"]}
+{"id": "e19", "question": "TDC 和 ArgoDB 怎么组合？", "company": "某集团", "industry": "金融", "expected_doc": "tw-selection-guide", "keywords": ["TDC", "ArgoDB"]}
+{"id": "e20", "question": "我们是制造企业，想选型 TDH + StellarDB + Sophon，怎么联系？", "company": "某制造集团", "industry": "制造", "expected_doc": "tw-selection-guide", "keywords": ["TDH", "StellarDB", "Sophon"]}

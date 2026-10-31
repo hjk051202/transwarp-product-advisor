@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from fieldops.main import app
 
 
-def test_health_and_chat() -> None:
+def test_health_chat_and_history() -> None:
     with TestClient(app) as client:
         health = client.get("/health")
         assert health.status_code == 200
@@ -15,18 +15,23 @@ def test_health_and_chat() -> None:
             "/chat",
             json={
                 "message": "ArgoDB 和 TDH 怎么选？",
+                "session_id": "SESS-api-test",
                 "company": "某城商行",
                 "industry": "金融",
-                "contact": "demo@example.com",
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["answer"]
-        assert data["citations"]
-        assert data["lead"]["lead_id"].startswith("LEAD-")
+        assert data["conversation_id"].startswith("CONV-")
 
-        lead_id = data["lead"]["lead_id"]
-        approved = client.post(f"/leads/{lead_id}/approve")
-        assert approved.status_code == 200
-        assert approved.json()["crm_lead_id"].startswith("CRM-")
+        conversations = client.get("/conversations?limit=5")
+        assert conversations.status_code == 200
+        assert any(
+            item["conversation_id"] == data["conversation_id"]
+            for item in conversations.json()
+        )
+
+        detail = client.get(f"/conversations/{data['conversation_id']}")
+        assert detail.status_code == 200
+        assert detail.json()["session_id"] == "SESS-api-test"

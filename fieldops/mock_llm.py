@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -18,7 +17,6 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 PRODUCTS = ["ArgoDB", "TDH", "TDC", "Sophon", "StellarDB", "KunDB"]
 INDUSTRIES = ["金融", "银行", "政务", "能源", "制造", "交通", "运营商"]
 COMPAT_TERMS = ["国产化", "信创", "麒麟", "统信", "鲲鹏", "海光", "兼容"]
-BUY_TERMS = ["选型", "怎么选", "试用", "报价", "方案", "联系", "咨询", "采购", "落地", "POC"]
 
 
 def _parse_json(content: Any) -> dict[str, Any]:
@@ -43,19 +41,6 @@ def _find_industry(text: str) -> str:
         if industry in text:
             return "金融" if industry == "银行" else industry
     return ""
-
-
-def _find_company(text: str) -> str:
-    match = re.search(r"(?:公司|客户)[：:]\s*([^\n，,。]{2,30})", text)
-    return match.group(1).strip() if match else "某企业客户"
-
-
-def _find_contact(text: str) -> str:
-    email = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
-    if email:
-        return email.group(0)
-    phone = re.search(r"1[3-9]\d{9}", text)
-    return phone.group(0) if phone else "待补充"
 
 
 class ProductAdvisorModel(BaseChatModel):
@@ -107,9 +92,7 @@ class ProductAdvisorModel(BaseChatModel):
                 return str(message.content)
         return ""
 
-    def _final_answer(
-        self, messages: list[BaseMessage], lead: dict[str, Any], query: str
-    ) -> str:
+    def _final_answer(self, messages: list[BaseMessage], query: str) -> str:
         knowledge = self._latest(messages, "search_knowledge")
         comparison = self._latest(messages, "compare_products")
         cases = self._latest(messages, "search_cases")
@@ -165,14 +148,11 @@ class ProductAdvisorModel(BaseChatModel):
                     f"{page}（{item.get('doc_id', '')}）"
                 )
 
-        if lead:
+        if any(term in query for term in ["报价", "POC", "试用", "方案"]):
             lines.append(
-                "\n### 下一步\n"
-                "可以安排产品试用、方案交流或 POC；报价与具体版本需售前确认。"
-            )
-            lines.append(
-                f"\n> 已生成售前线索草稿 **{lead.get('lead_id')}**，"
-                "请在左侧「线索草稿」确认后写入 CRM。"
+                "\n### 商务流程\n"
+                "报价、POC 和试用需要结合数据量、部署环境、产品版本由售前确认；"
+                "本演示不提供真实价格承诺。"
             )
         return "\n".join(lines)
 
@@ -186,7 +166,6 @@ class ProductAdvisorModel(BaseChatModel):
         full_query = self._text(messages)
         query = full_query.split("\n\n")[0]
         tool_messages = self._tool_messages(messages)
-        done = {message.name for message in tool_messages}
         products = _find_products(query)
         industry = _find_industry(full_query)
         wants_compare = len(products) >= 2 or any(
@@ -194,7 +173,6 @@ class ProductAdvisorModel(BaseChatModel):
         )
         wants_cases = any(term in query for term in ["案例", "客户", "同行业", "实践"])
         wants_compat = any(term in query for term in COMPAT_TERMS)
-        buy_intent = any(term in query for term in BUY_TERMS)
 
         if not tool_messages:
             calls = []
@@ -208,7 +186,7 @@ class ProductAdvisorModel(BaseChatModel):
                 )
                 if call:
                     calls.append(call)
-            if industry and (wants_cases or buy_intent):
+            if industry and wants_cases:
                 call = self._call(
                     "search_cases",
                     {"industry": industry, "scenario": query[:100]},
@@ -238,29 +216,10 @@ class ProductAdvisorModel(BaseChatModel):
                     ]
                 )
 
-        if buy_intent and "draft_lead" not in done:
-            call = self._call(
-                "draft_lead",
-                {
-                    "company": _find_company(full_query),
-                    "industry": industry or "待补充",
-                    "contact": _find_contact(full_query),
-                    "need": query[:300],
-                    "products": products,
-                },
-            )
-            if call:
-                return ChatResult(
-                    generations=[
-                        ChatGeneration(message=AIMessage(content="", tool_calls=[call]))
-                    ]
-                )
-
-        lead = self._latest(messages, "draft_lead")
         return ChatResult(
             generations=[
                 ChatGeneration(
-                    message=AIMessage(content=self._final_answer(messages, lead, query))
+                    message=AIMessage(content=self._final_answer(messages, query))
                 )
             ]
         )

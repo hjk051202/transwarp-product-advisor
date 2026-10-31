@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 import httpx
 import streamlit as st
 
 API_URL = os.getenv("FIELDOPS_API_URL", "http://127.0.0.1:8000")
 API_KEY = os.getenv("FIELDOPS_API_KEY", "")
+
+
+def new_session_id() -> str:
+    return f"SESS-{datetime.now():%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
+
 
 st.set_page_config(
     page_title="星环产品选型助手",
@@ -69,6 +76,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if "session_id" not in st.session_state:
+    st.session_state.session_id = new_session_id()
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -83,10 +92,6 @@ if "messages" not in st.session_state:
             "mode": "",
         }
     ]
-if "lead" not in st.session_state:
-    st.session_state.lead = None
-if "crm_lead" not in st.session_state:
-    st.session_state.crm_lead = None
 if "api_url" not in st.session_state:
     st.session_state.api_url = API_URL
 if "api_key" not in st.session_state:
@@ -104,15 +109,15 @@ def fetch_health(url: str) -> dict[str, Any] | None:
 
 
 def post_chat(
-    url: str, message: str, company: str, industry: str, contact: str, key: str
+    url: str, message: str, session_id: str, company: str, industry: str, key: str
 ) -> dict[str, Any]:
     response = httpx.post(
         f"{url.rstrip('/')}/chat",
         json={
             "message": message,
+            "session_id": session_id,
             "company": company,
             "industry": industry,
-            "contact": contact,
         },
         headers={"X-API-Key": key} if key else {},
         timeout=90,
@@ -121,11 +126,12 @@ def post_chat(
     return response.json()
 
 
-def post_approve(url: str, lead_id: str, key: str) -> dict[str, Any]:
-    response = httpx.post(
-        f"{url.rstrip('/')}/leads/{lead_id}/approve",
+def fetch_history(url: str, key: str, limit: int = 20) -> list[dict[str, Any]]:
+    response = httpx.get(
+        f"{url.rstrip('/')}/conversations",
+        params={"limit": limit},
         headers={"X-API-Key": key} if key else {},
-        timeout=60,
+        timeout=30,
     )
     response.raise_for_status()
     return response.json()
@@ -139,7 +145,7 @@ def render_header() -> None:
             <div class="hero-icon">🧭</div>
             <div>
               <div class="hero-title">星环产品选型助手</div>
-              <div class="hero-sub">Transwarp Product Advisor · 产品选型与售前线索</div>
+              <div class="hero-sub">Transwarp Product Advisor · 产品选型与历史会话</div>
             </div>
           </div>
           <div class="hero-tags">
@@ -147,7 +153,7 @@ def render_header() -> None:
             <span class="tag">RAG</span>
             <span class="tag">Tool Calling</span>
             <span class="tag">MCP</span>
-            <span class="tag">人工确认</span>
+            <span class="tag">历史会话</span>
           </div>
         </div>
         """,
@@ -170,7 +176,7 @@ with st.sidebar:
     )
 
     page = st.radio(
-        "导航", ["选型咨询", "线索草稿", "技术栈"], label_visibility="collapsed"
+        "导航", ["选型咨询", "历史会话", "技术栈"], label_visibility="collapsed"
     )
     st.divider()
     api_url_input = st.text_input("后端地址", value=st.session_state.api_url)
@@ -183,7 +189,12 @@ with st.sidebar:
     industry = st.selectbox(
         "行业", ["金融", "政务", "能源", "制造", "交通", "运营商", "其他"], index=0
     )
-    contact = st.text_input("联系方式", value="demo@example.com")
+
+    st.caption(f"当前会话：`{st.session_state.session_id}`")
+    if st.button("新建会话", use_container_width=True):
+        st.session_state.session_id = new_session_id()
+        st.session_state.messages = st.session_state.messages[:1]
+        st.rerun()
 
     health = fetch_health(st.session_state.api_url)
     if health:
@@ -202,17 +213,11 @@ with st.sidebar:
         fetch_health.clear()
         st.rerun()
 
-    if st.button("清空对话", use_container_width=True):
-        st.session_state.messages = st.session_state.messages[:1]
-        st.session_state.lead = None
-        st.session_state.crm_lead = None
-        st.rerun()
-
 render_header()
 
 
 def render_chat() -> None:
-    st.caption(f"客户：{company} · 行业：{industry} · 后端：{st.session_state.api_url}")
+    st.caption(f"客户：{company} · 行业：{industry} · 会话：{st.session_state.session_id}")
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -222,10 +227,10 @@ def render_chat() -> None:
             if citations:
                 with st.expander(f"引用来源（{len(citations)}）"):
                     for item in citations:
-                        page = f"p.{item.get('page')}" if item.get("page") else ""
+                        page_no = f"p.{item.get('page')}" if item.get("page") else ""
                         st.markdown(
                             f"**{item.get('title', '')}** "
-                            f"{item.get('section', '')} {page}  \n"
+                            f"{item.get('section', '')} {page_no}  \n"
                             f"`{item.get('doc_id', '')}` · {item.get('product', '')}"
                         )
                         st.caption(item.get("snippet", "")[:300])
@@ -250,9 +255,9 @@ def render_chat() -> None:
         data = post_chat(
             st.session_state.api_url,
             prompt,
+            st.session_state.session_id,
             company,
             industry,
-            contact,
             st.session_state.api_key,
         )
     except Exception as exc:
@@ -267,8 +272,6 @@ def render_chat() -> None:
         "mode": data.get("mode", ""),
     }
     st.session_state.messages.append(assistant_message)
-    st.session_state.lead = data.get("lead")
-    st.session_state.crm_lead = None
 
     with st.chat_message("assistant"):
         st.markdown(assistant_message["content"])
@@ -276,10 +279,10 @@ def render_chat() -> None:
         if assistant_message["citations"]:
             with st.expander(f"引用来源（{len(assistant_message['citations'])}）"):
                 for item in assistant_message["citations"]:
-                    page = f"p.{item.get('page')}" if item.get("page") else ""
+                    page_no = f"p.{item.get('page')}" if item.get("page") else ""
                     st.markdown(
                         f"**{item.get('title', '')}** "
-                        f"{item.get('section', '')} {page}  \n"
+                        f"{item.get('section', '')} {page_no}  \n"
                         f"`{item.get('doc_id', '')}` · {item.get('product', '')}"
                     )
                     st.caption(item.get("snippet", "")[:300])
@@ -289,86 +292,50 @@ def render_chat() -> None:
                     st.markdown(f"**{tool.get('name', '')}**")
                     st.json(tool.get("result", {}))
 
-    if st.session_state.lead:
-        st.info("线索草稿已生成，去左侧「线索草稿」确认。")
+    if data.get("conversation_id"):
+        st.caption(f"已保存历史会话：`{data['conversation_id']}`")
 
 
-def render_lead() -> None:
-    lead = st.session_state.lead
-    if not lead:
-        st.markdown(
-            '<div class="panel"><div class="panel-title">还没有线索草稿</div>'
-            '<div class="muted">先在「选型咨询」里描述需求，例如 ArgoDB 和 TDH 怎么选，'
-            "助手会在识别到选型/试用/报价意向时生成草稿。</div></div>",
-            unsafe_allow_html=True,
+def render_history() -> None:
+    st.markdown("### 历史会话")
+    st.caption("每次问答都会保存到 SQLite；MCP 可用时通过 history-mcp 保存。")
+    if st.button("刷新历史", use_container_width=False):
+        st.rerun()
+    try:
+        items = fetch_history(
+            st.session_state.api_url, st.session_state.api_key, limit=30
         )
+    except Exception as exc:
+        st.error(f"读取历史失败：{exc}")
         return
 
-    if st.session_state.crm_lead:
-        crm = st.session_state.crm_lead
-        st.success(f"线索已写入 CRM：{crm.get('crm_lead_id')}")
-        st.markdown(
-            f"""
-            <div class="panel">
-              <div class="panel-title">CRM 线索已创建</div>
-              <div class="muted">
-                CRM 线索号：<b>{crm.get('crm_lead_id')}</b><br/>
-                本地草稿号：{crm.get('lead_id')}<br/>
-                状态：{crm.get('status')}<br/>
-                写入路径：crm-mcp.create_lead
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    if not items:
+        st.info("还没有历史会话。")
         return
 
-    st.markdown(
-        '<div class="panel"><div class="panel-title">售前线索草稿 · 待人工确认</div>'
-        '<div class="muted">写操作不会自动执行。请核对客户、行业、需求和推荐产品后批准。</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("行业", lead.get("industry", "-"))
-    c2.metric("推荐产品", " / ".join(lead.get("products") or []) or "待确认")
-    c3.metric("状态", lead.get("status", "draft"))
-
-    st.markdown("**客户与需求**")
-    st.markdown(
-        f"""
-        - 公司：{lead.get('company')}
-        - 行业：{lead.get('industry')}
-        - 联系方式：{lead.get('contact')}
-        - 需求：{lead.get('need')}
-        - 草稿号：`{lead.get('lead_id')}`
-        """
-    )
-
-    st.markdown("**推荐产品**")
-    st.write(lead.get("products") or "待确认")
-
-    if st.button("批准并写入 CRM", type="primary"):
-        try:
-            with st.spinner("正在通过 crm-mcp 创建线索..."):
-                result = post_approve(
-                    st.session_state.api_url,
-                    lead["lead_id"],
-                    st.session_state.api_key,
-                )
-            st.session_state.crm_lead = result
-            st.rerun()
-        except Exception as exc:
-            st.error(f"写入失败：{exc}")
+    for item in items:
+        title = item.get("user_message", "")[:50] or "未命名会话"
+        with st.expander(f"{title} · {item.get('created_at', '')}"):
+            st.caption(f"session_id: {item.get('session_id', '')}")
+            st.markdown(f"**用户**：{item.get('user_message', '')}")
+            st.markdown(f"**助手**：{item.get('assistant_message', '')}")
+            citations = item.get("citations") or []
+            if citations:
+                st.caption(f"引用 {len(citations)} 条")
+                for citation in citations:
+                    st.markdown(
+                        f"- {citation.get('title', '')} "
+                        f"{citation.get('section', '')}（{citation.get('doc_id', '')}）"
+                    )
 
 
 def render_stack() -> None:
     st.markdown("### 4 + 1 项核心能力")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("知识文档", "9 份")
+    c1.metric("知识文档", "12 份")
     c2.metric("MCP Server", "1 个")
-    c3.metric("原生工具", "6 个")
-    c4.metric("写操作审批", "1 个入口")
+    c3.metric("原生工具", "5 个")
+    c4.metric("历史会话", "SQLite")
 
     st.markdown("### 技术栈解决的实际问题")
     st.dataframe(
@@ -376,7 +343,7 @@ def render_stack() -> None:
             {
                 "技术": "LangChain",
                 "解决的实际问题": "选型咨询是多步流程，if/else 会越来越乱",
-                "本项目的实现": "create_agent 统一调度 RAG、产品工具、MCP 工具",
+                "本项目的实现": "create_agent 统一调度 RAG 和产品工具",
             },
             {
                 "技术": "RAG",
@@ -390,13 +357,13 @@ def render_stack() -> None:
             },
             {
                 "技术": "MCP",
-                "解决的实际问题": "CRM 是外部系统，留资要认证、审计、复用",
-                "本项目的实现": "crm-mcp 暴露 create_lead / get_lead",
+                "解决的实际问题": "历史会话要跨进程持久化、可复用",
+                "本项目的实现": "history-mcp 暴露 save/get/list conversation",
             },
             {
-                "技术": "人工确认",
-                "解决的实际问题": "线索写错会影响销售跟进",
-                "本项目的实现": "Agent 只出 draft，售前确认后才写 CRM",
+                "技术": "历史会话",
+                "解决的实际问题": "用户关闭页面后还能回看之前问过什么",
+                "本项目的实现": "conversations 表 + 历史会话页面",
             },
         ],
         hide_index=True,
@@ -409,9 +376,9 @@ def render_stack() -> None:
         "  -> FastAPI /chat\n"
         "    -> LangChain create_agent\n"
         "      -> Chroma RAG (search_knowledge)\n"
-        "      -> Native tools (list/compare/cases/compatibility/draft)\n"
-        "      -> crm-mcp (create_lead / get_lead)\n"
-        "        -> SQLite CRM mock",
+        "      -> Native tools (list/compare/cases/compatibility)\n"
+        "    -> history-mcp (save_conversation)\n"
+        "      -> SQLite conversations",
         language="text",
     )
     st.info(
@@ -422,8 +389,8 @@ def render_stack() -> None:
 
 if page == "选型咨询":
     render_chat()
-elif page == "线索草稿":
-    render_lead()
+elif page == "历史会话":
+    render_history()
 else:
     render_stack()
 

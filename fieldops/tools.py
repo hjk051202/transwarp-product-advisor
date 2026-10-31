@@ -1,10 +1,8 @@
-"""Native LangChain tools for product selection and lead capture."""
+"""Native LangChain tools for product selection."""
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from uuid import uuid4
 
 from langchain_core.tools import tool
 
@@ -14,7 +12,6 @@ from fieldops.data import (
     list_products as list_product_data,
     search_cases as search_case_data,
 )
-from fieldops.db import create_lead
 from fieldops.rag import search_json
 
 
@@ -140,45 +137,10 @@ def check_compatibility(os_name: str, cpu: str) -> str:
     return _dumps(compatibility_lookup(os_name, cpu))
 
 
-@tool
-def draft_lead(
-    company: str,
-    industry: str,
-    contact: str,
-    need: str,
-    products: list[str] | None = None,
-) -> str:
-    """生成售前线索草稿，但不直接写入 CRM。
-
-    当客户表达选型、试用、报价、方案交流等意向时使用。
-    该工具只写本地 draft 表，必须由销售/售前确认后才能写入 CRM。
-
-    Args:
-        company: 客户公司名。
-        industry: 行业。
-        contact: 联系方式（可脱敏）。
-        need: 客户需求摘要。
-        products: 推荐产品列表。
-    """
-
-    products = products or []
-    lead_id = f"LEAD-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
-    lead = create_lead(
-        lead_id=lead_id,
-        company=company or "待补充",
-        industry=industry or "待补充",
-        contact=contact or "待补充",
-        need=need,
-        products=products,
-    )
-    return _dumps(lead)
-
-
 NATIVE_TOOLS = [
     search_knowledge,
     list_products,
     compare_products,
     search_cases,
     check_compatibility,
-    draft_lead,
 ]

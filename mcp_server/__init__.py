@@ -1,1 +1,1 @@
-"""CRM MCP server package."""
+"""Conversation-history MCP server package."""

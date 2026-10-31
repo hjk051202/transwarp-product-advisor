@@ -1,14 +1,16 @@
-"""Adapter contracts for CRM and product catalog systems."""
+"""Adapter contracts for conversation history and product catalog."""
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
 
-class CRMAdapter(Protocol):
-    async def create_lead(self, lead: dict[str, Any]) -> dict[str, Any]: ...
+class HistoryAdapter(Protocol):
+    async def save_conversation(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
-    async def get_lead(self, crm_lead_id: str) -> dict[str, Any] | None: ...
+    async def get_conversation(self, conversation_id: str) -> dict[str, Any] | None: ...
+
+    async def list_conversations(self, limit: int = 20) -> list[dict[str, Any]]: ...
 
 
 class CatalogAdapter(Protocol):

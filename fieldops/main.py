@@ -15,10 +15,10 @@ from fastapi.responses import JSONResponse
 from fieldops import audit
 from fieldops.agent import get_agent
 from fieldops.config import APP_NAME
-from fieldops.db import get_lead, init_db, list_audit
-from fieldops.mcp_client import get_mcp_tools
-from fieldops.schemas import ApproveResponse, ChatRequest, ChatResponse
-from fieldops.service import approve, chat, leads
+from fieldops.db import init_db, list_audit
+from fieldops.history_client import get_mcp_tools
+from fieldops.schemas import ChatRequest, ChatResponse
+from fieldops.service import chat, get_history, list_history
 
 PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
@@ -79,7 +79,7 @@ async def health() -> dict[str, Any]:
         "version": "1.0.0",
         "mode": mode,
         "auth_enabled": bool(api_key()),
-        "mcp_url": os.getenv("CRM_MCP_URL", "http://127.0.0.1:8765/mcp"),
+        "mcp_url": os.getenv("HISTORY_MCP_URL", "http://127.0.0.1:8765/mcp"),
         "mcp_tools": [tool.name for tool in tools],
     }
 
@@ -88,31 +88,23 @@ async def health() -> dict[str, Any]:
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     return await chat(
         request.message,
+        session_id=request.session_id,
         company=request.company,
         industry=request.industry,
-        contact=request.contact,
     )
 
 
-@app.get("/leads")
-async def list_leads_endpoint() -> list[dict[str, Any]]:
-    return leads()
+@app.get("/conversations")
+async def list_conversations_endpoint(limit: int = 20) -> list[dict[str, Any]]:
+    return await list_history(limit=max(1, min(limit, 100)))
 
 
-@app.get("/leads/{lead_id}")
-async def get_lead_endpoint(lead_id: str) -> dict[str, Any]:
-    lead = get_lead(lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="lead not found")
-    return lead
-
-
-@app.post("/leads/{lead_id}/approve", response_model=ApproveResponse)
-async def approve_lead_endpoint(lead_id: str) -> ApproveResponse:
-    try:
-        return await approve(lead_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+@app.get("/conversations/{conversation_id}")
+async def get_conversation_endpoint(conversation_id: str) -> dict[str, Any]:
+    conversation = await get_history(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    return conversation
 
 
 @app.get("/audit")

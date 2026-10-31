@@ -10,10 +10,10 @@ if (-not (Test-Path $python)) {
     & $python -m pip install -r requirements.txt
 }
 
-Write-Host "Starting crm-mcp on http://127.0.0.1:8765 ..."
+Write-Host "Starting history-mcp on http://127.0.0.1:8765 ..."
 $env:MCP_TRANSPORT = "streamable-http"
 $mcp = Start-Process -FilePath $python `
-    -ArgumentList "-m", "mcp_server.crm_server" `
+    -ArgumentList "-m", "mcp_server.history_server" `
     -WorkingDirectory $root -PassThru -WindowStyle Hidden
 
 Start-Sleep -Seconds 2

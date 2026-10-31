@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
+    session_id: str | None = None
     company: str | None = None
     industry: str | None = None
-    contact: str | None = None
 
 
 class Citation(BaseModel):
@@ -30,25 +30,20 @@ class ToolTrace(BaseModel):
     result: Any = None
 
 
-class LeadDraft(BaseModel):
-    lead_id: str
-    company: str
-    industry: str
-    contact: str
-    need: str
-    products: list[str] = Field(default_factory=list)
-    status: str = "draft"
-
-
 class ChatResponse(BaseModel):
     answer: str
     citations: list[Citation] = Field(default_factory=list)
     tool_trace: list[ToolTrace] = Field(default_factory=list)
-    lead: LeadDraft | None = None
+    conversation_id: str = ""
     mode: str = "offline"
 
 
-class ApproveResponse(BaseModel):
-    lead_id: str
-    crm_lead_id: str
-    status: str
+class Conversation(BaseModel):
+    conversation_id: str
+    session_id: str
+    user_message: str
+    assistant_message: str
+    citations: list[Citation] = Field(default_factory=list)
+    tool_trace: list[ToolTrace] = Field(default_factory=list)
+    mode: str = ""
+    created_at: str = ""

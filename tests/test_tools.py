@@ -5,7 +5,6 @@ import json
 from fieldops.tools import (
     check_compatibility,
     compare_products,
-    draft_lead,
     list_products,
     search_cases,
 )
@@ -31,20 +30,3 @@ def test_cases_and_compatibility() -> None:
     )
     assert compat["os_support"]
     assert compat["cpu_support"]
-
-
-def test_draft_lead_tool() -> None:
-    lead = json.loads(
-        draft_lead.invoke(
-            {
-                "company": "pytest 银行",
-                "industry": "金融",
-                "contact": "pytest@example.com",
-                "need": "ArgoDB 选型",
-                "products": ["ArgoDB"],
-            }
-        )
-    )
-    assert lead["lead_id"].startswith("LEAD-")
-    assert lead["status"] == "draft"
-    assert lead["products"] == ["ArgoDB"]
