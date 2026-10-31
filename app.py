@@ -30,6 +30,10 @@ st.markdown(
     <style>
     :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --brand:#0f766e; --soft:#ccfbf1; }
     .block-container { padding-top:1.2rem; padding-bottom:2rem; max-width:1180px; }
+    header[data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    #MainMenu { display:none !important; }
     .hero {
         display:flex; justify-content:space-between; gap:1rem; align-items:center;
         padding:1.2rem 1.4rem; border:1px solid var(--line); border-radius:18px;
