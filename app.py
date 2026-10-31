@@ -147,7 +147,7 @@ def render_header() -> None:
             <span class="tag">RAG</span>
             <span class="tag">Tool Calling</span>
             <span class="tag">MCP</span>
-            <span class="tag">HITL</span>
+            <span class="tag">人工确认</span>
           </div>
         </div>
         """,
@@ -394,7 +394,7 @@ def render_stack() -> None:
                 "本项目的实现": "crm-mcp 暴露 create_lead / get_lead",
             },
             {
-                "技术": "HITL",
+                "技术": "人工确认",
                 "解决的实际问题": "线索写错会影响销售跟进",
                 "本项目的实现": "Agent 只出 draft，售前确认后才写 CRM",
             },

@@ -27,7 +27,7 @@
   - `draft_lead`
 - **LangChain Agent**：`create_agent` 统一调度 RAG、产品工具和 MCP 工具
 - **MCP**：`crm-mcp` 暴露 `create_lead` / `get_lead`，Streamable HTTP 接入
-- **HITL**：Agent 只生成线索草稿；售前确认后才写入 CRM
+- **人工确认**：Agent 只生成线索草稿；售前确认后才写入 CRM
 - **FastAPI**：`/chat`、`/leads`、`/leads/{id}/approve`、`/audit`、`/health`
 - **API Key 鉴权**：配置 `FIELDOPS_API_KEY` 后保护业务接口
 - **审计日志**：记录 request_id、actor、action、resource、detail
@@ -61,12 +61,12 @@
 | **RAG** | 产品资料、案例、兼容性散落，模型容易记错 | Chroma 检索 + 产品/章节/页码引用 |
 | **Tool Calling** | 产品对比、案例、兼容性不能靠模型记忆 | 6 个原生工具 |
 | **MCP** | CRM 是外部系统，留资要认证、审计、复用 | `crm-mcp` 暴露建线索/查线索 |
-| **HITL** | 线索写错会影响销售跟进 | Agent 只出 draft，售前确认后才写 CRM |
+| **人工确认** | 线索写错会影响销售跟进 | Agent 只出 draft，售前确认后才写 CRM |
 | **审计** | 出问题要能追溯谁让 Agent 做了什么 | request_id + actor + action + resource + detail |
 
 一句话：
 
-> LangChain 管“流程怎么编排”，RAG 管“产品资料从哪来”，Tool Calling 管“对比/案例/兼容性怎么查”，MCP 管“CRM 怎么接”，HITL 管“线索怎么写才不闯祸”。
+> LangChain 管“流程怎么编排”，RAG 管“产品资料从哪来”，Tool Calling 管“对比/案例/兼容性怎么查”，MCP 管“CRM 怎么接”，最后一步人工确认决定“线索怎么写才不闯祸”。
 
 ---
 
