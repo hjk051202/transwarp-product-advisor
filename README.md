@@ -27,8 +27,7 @@
 - **审计日志**：每次对话、审批都会记录 request_id、actor、action、resource、detail
 - **适配层**：CMMS 支持 `mcp / http / local`，ERP 支持 `json / http`
 - **Streamlit**：对话诊断、引用来源、工具轨迹、工单审批、技术栈说明
-- **Docker Compose**：mcp + api + ui 三个服务
-- **CI**：GitHub Actions 跑测试和两个评测脚本
+- **本地一键启动**：`run.ps1` 拉起 MCP、API、UI 三个进程
 - **测试**：15 个 pytest 用例通过
 - **评测**：
   - RAG 检索：15 条问题，Recall@4 = 15/15
@@ -36,7 +35,7 @@
 
 > 没有模型 API Key 时，项目使用 `MockToolCallingModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
 >
-> 真实模型路径已实现，但当前开发环境没有 API Key，未做真实模型端到端验证；评测数字来自离线 mock 路径。Docker 文件已做 YAML 校验，但当前环境没有 Docker，未做容器运行时验证。
+> 真实模型路径已实现，但当前开发环境没有 API Key，未做真实模型端到端验证；评测数字来自离线 mock 路径。
 
 ---
 
@@ -140,25 +139,6 @@ streamlit run app.py
 ```powershell
 .\run.ps1
 ```
-
-### 方式二：Docker Compose
-
-```powershell
-$env:FIELDOPS_API_KEY = "change-me"
-docker compose up --build
-```
-
-- UI：<http://127.0.0.1:8501>
-- API：<http://127.0.0.1:8000/docs>
-- MCP：<http://127.0.0.1:8765/mcp>
-
-三个服务：
-
-| 服务 | 作用 |
-|---|---|
-| `mcp` | `cmms-mcp`，Streamable HTTP |
-| `api` | FastAPI + LangChain Agent |
-| `ui` | Streamlit 前端 |
 
 ### 演示步骤
 
@@ -316,9 +296,6 @@ fieldops-copilot/
 │  ├─ run_eval.py
 │  └─ run_e2e.py
 ├─ tests/                       # 15 个用例
-├─ Dockerfile
-├─ docker-compose.yml
-├─ .github/workflows/ci.yml
 ├─ requirements.txt
 ├─ run.ps1
 ├─ pytest.ini
@@ -330,11 +307,10 @@ fieldops-copilot/
 ## 安全与边界
 
 - 默认 `FIELDOPS_API_KEY` 为空时鉴权关闭，仅适合本地开发。
-- 生产环境应把 API Key 放在 Secret Manager，不要写进 compose 文件。
+- 生产环境应把 API Key 放在 Secret Manager，不要提交到 Git。
 - 审计日志会记录消息前 160 字；生产环境应做 PII 脱敏。
 - `HttpCMMSAdapter` / `HttpERPAdapter` 是适配器骨架，未对接真实 CMMS/ERP。
 - 当前 PDF 为 ASCII 示例，中文扫描件需要 OCR（PaddleOCR/Tesseract）。
-- Docker 文件未在当前环境运行验证。
 - 真实模型路径未验证；离线 mock 模型只覆盖预设场景。
 
 ---
@@ -346,7 +322,7 @@ fieldops-copilot/
 - 基于 LangChain 1.x `create_agent` 构建设备售后诊断 Agent，统一调度 Chroma RAG、5 个业务工具和 1 个 MCP Server，完成从故障描述到工单草稿的闭环。
 - 设计 Markdown/PDF 混合知识入库链路，按标题切分并保留型号、版本、页码元数据；15 条检索评测 Recall@4 为 15/15，20 条端到端评测 citation/answer/draft 均 20/20。
 - 将 CMMS 封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露建单/查单；抽象 `mcp/http/local` 三种 CMMS 适配器，写操作经人工确认后执行。
-- 使用 FastAPI + Streamlit 实现前后端分离 Demo，加入 API Key 鉴权、request_id 审计日志、Docker Compose 与 GitHub Actions；15 个 pytest 用例覆盖 RAG、工具、MCP、鉴权、审计与适配器。
+- 使用 FastAPI + Streamlit 实现前后端分离 Demo，加入 API Key 鉴权、request_id 审计日志；15 个 pytest 用例覆盖 RAG、工具、MCP、鉴权、审计与适配器。
 
 > 指标请写你实测的数字；当前评测是小样本合成集，面试时主动说明语料规模和 mock 模型限制。
 
@@ -356,7 +332,7 @@ fieldops-copilot/
 
 - [x] v0.1：Streamlit UI + Mock 业务流程
 - [x] v0.2：Chroma RAG + 5 个 tools + LangChain Agent + `cmms-mcp` + FastAPI
-- [x] v1.0：PDF 入库 + 20 条端到端评测 + 鉴权/审计 + 适配层 + Docker + CI
+- [x] v1.0：PDF 入库 + 20 条端到端评测 + 鉴权/审计 + 适配层
 - [ ] v1.1：真实模型端到端评测
 - [ ] v1.2：中文 PDF/OCR + 50+ 份真实风格手册
 - [ ] v1.3：真实 CMMS/ERP 对接、SSO、可观测性
