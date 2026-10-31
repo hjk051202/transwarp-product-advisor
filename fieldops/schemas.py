@@ -7,13 +7,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=2000)
-    session_id: str | None = None
-    company: str | None = None
-    industry: str | None = None
-
-
 class Citation(BaseModel):
     doc_id: str
     title: str

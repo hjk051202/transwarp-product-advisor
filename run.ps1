@@ -18,19 +18,11 @@ $mcp = Start-Process -FilePath $python `
 
 Start-Sleep -Seconds 2
 
-Write-Host "Starting FastAPI on http://127.0.0.1:8000 ..."
-$api = Start-Process -FilePath $python `
-    -ArgumentList "-m", "uvicorn", "fieldops.main:app", "--host", "127.0.0.1", "--port", "8000" `
-    -WorkingDirectory $root -PassThru -WindowStyle Hidden
-
-Start-Sleep -Seconds 3
-
 Write-Host "Starting Streamlit on http://127.0.0.1:8501 ..."
 try {
     & $python -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501
 }
 finally {
-    Write-Host "Stopping API and MCP..."
-    if ($api -and -not $api.HasExited) { Stop-Process -Id $api.Id -Force }
+    Write-Host "Stopping MCP..."
     if ($mcp -and -not $mcp.HasExited) { Stop-Process -Id $mcp.Id -Force }
 }

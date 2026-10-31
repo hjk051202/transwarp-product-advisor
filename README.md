@@ -11,7 +11,7 @@
 
 ## 当前状态
 
-**v1.0：可本地运行的端到端 Demo。**
+**v1.0：可本地运行的 Streamlit 单进程 Demo。**
 
 已实现：
 
@@ -25,12 +25,10 @@
 - **LangChain Agent**：`create_agent` 统一调度 RAG 和产品工具
 - **MCP**：`history-mcp` 暴露 `save_conversation` / `get_conversation` / `list_conversations`，Streamable HTTP 接入
 - **历史会话**：每次问答自动保存到 SQLite；Streamlit 有「历史会话」页面
-- **FastAPI**：`/chat`、`/conversations`、`/conversations/{id}`、`/audit`、`/health`
-- **API Key 鉴权**：配置 `FIELDOPS_API_KEY` 后保护业务接口
-- **审计日志**：记录 request_id、actor、action、resource、detail
+- **Streamlit 直连**：UI 直接调用 `fieldops.service`，没有 FastAPI、没有 HTTP API、没有 API Key
+- **审计日志**：内部记录 request_id、actor、action、resource、detail（当前没有单独的审计页面）
 - **适配层**：历史会话支持 `mcp / http / local`，产品目录支持 `json / http`
-- **Streamlit**：选型咨询、引用来源、工具轨迹、历史会话、技术栈说明
-- **测试**：12 个 pytest 用例通过，1 个在 MCP 未启动时自动跳过
+- **测试**：10 个 pytest 用例通过
 - **评测**：
   - RAG：16 条问题，Recall@4 = 16/16
   - 端到端：20 条问题，citation/answer/history 均 20/20
@@ -59,11 +57,10 @@
 | **Tool Calling** | 产品对比、案例、兼容性不能靠模型记忆 | 5 个原生工具 |
 | **MCP** | 历史会话要跨进程持久化、可复用 | `history-mcp` 暴露保存/查询会话 |
 | **历史会话** | 用户关闭页面后还能回看之前问过什么 | `conversations` 表 + 历史会话页面 |
-| **审计** | 出问题要能追溯谁让 Agent 做了什么 | request_id + actor + action + resource + detail |
 
 一句话：
 
-> LangChain 管“流程怎么编排”，RAG 管“产品资料从哪来”，Tool Calling 管“对比/案例/兼容性怎么查”，MCP 管“历史会话怎么存”，数据库管“聊过什么”。
+> LangChain 管“流程怎么编排”，RAG 管“产品资料从哪来”，Tool Calling 管“对比/案例/兼容性怎么查”，MCP 管“历史会话怎么存”，SQLite 管“聊过什么”。
 
 ---
 
@@ -91,14 +88,12 @@
 
 ```text
 ┌────────────────────────────────────┐
-│ Streamlit UI                       │
+│ Streamlit UI (app.py)              │
 │ 选型咨询 / 引用 / 工具轨迹 / 历史     │
 └───────────────┬────────────────────┘
-                │ HTTP + X-API-Key
+                │ 直接 Python 调用
 ┌───────────────▼────────────────────┐
-│ FastAPI                            │
-│ auth / request_id / audit          │
-│ /chat /conversations /audit        │
+│ fieldops.service.chat              │
 └───────────────┬────────────────────┘
                 │
 ┌───────────────▼────────────────────┐
@@ -118,8 +113,7 @@
              └───────────┘       │
                             ┌────▼──────┐
                             │ SQLite    │
-                            │ history + │
-                            │ audit     │
+                            │ history   │
                             └───────────┘
 ```
 
@@ -141,13 +135,7 @@ $env:MCP_TRANSPORT = "streamable-http"
 python -m mcp_server.history_server
 ```
 
-启动 FastAPI：
-
-```bash
-uvicorn fieldops.main:app --host 127.0.0.1 --port 8000
-```
-
-启动 UI：
+另开一个终端，启动 UI：
 
 ```bash
 streamlit run app.py
@@ -160,6 +148,8 @@ streamlit run app.py
 ```powershell
 .\run.ps1
 ```
+
+`run.ps1` 只启动 **history-mcp + Streamlit**，不再启动 FastAPI。
 
 ### 演示步骤
 
@@ -176,6 +166,20 @@ streamlit run app.py
 3. 左侧切到 **历史会话**
 4. 点开之前的问答，回看用户问题、助手回答和引用
 
+如果只输入：
+
+```text
+我选择什么产品比较好？
+```
+
+助手不会乱推产品，也不会贴 FAQ，而是先问：
+
+- 主要负载是什么？
+- 数据量多大？
+- 是否有国产化/部署要求？
+
+然后给一个初步方向。
+
 ---
 
 ## 配置
@@ -185,7 +189,6 @@ streamlit run app.py
 | `DEEPSEEK_API_KEY` | 空 | 使用 DeepSeek 真实模型 |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | 模型名 |
 | `OPENAI_API_KEY` | 空 | 使用 OpenAI 真实模型 |
-| `FIELDOPS_API_KEY` | 空 | 设置后启用 API Key 鉴权 |
 | `HISTORY_MCP_URL` | `http://127.0.0.1:8765/mcp` | MCP 地址 |
 | `HISTORY_ADAPTER` | `mcp` | `mcp` / `http` / `local` |
 | `HISTORY_HTTP_URL` | `http://127.0.0.1:9000` | 真实历史服务地址 |
@@ -197,40 +200,7 @@ streamlit run app.py
 
 ```powershell
 $env:DEEPSEEK_API_KEY = "sk-..."
-uvicorn fieldops.main:app --port 8000
-```
-
----
-
-## API 与鉴权
-
-| 方法 | 路径 | 作用 |
-|---|---|---|
-| `GET` | `/health` | 模式、MCP 工具、鉴权状态 |
-| `POST` | `/chat` | 选型咨询，返回 answer / citations / tool_trace / conversation_id |
-| `GET` | `/conversations` | 最近的历史会话 |
-| `GET` | `/conversations/{id}` | 查询单条历史会话 |
-| `GET` | `/audit` | 最近审计日志 |
-
-启用鉴权后，除 `/health`、`/docs`、`/openapi.json` 外都需要：
-
-```http
-X-API-Key: change-me
-```
-
-或：
-
-```http
-Authorization: Bearer change-me
-```
-
-示例：
-
-```bash
-curl -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: change-me" \
-  -d '{"message":"ArgoDB 和 TDH 怎么选？","session_id":"SESS-demo"}'
+streamlit run app.py
 ```
 
 ---
@@ -272,7 +242,7 @@ history_saved   = 20/20 = 100.00%
 pytest -q
 ```
 
-当前：`12 passed, 1 skipped`（未启动 history MCP 时）；启动 MCP 后为 `13 passed`。
+当前：`10 passed`（启动 history MCP 时）；MCP 未启动时 `9 passed, 1 skipped`。
 
 ---
 
@@ -280,9 +250,8 @@ pytest -q
 
 ```text
 fieldops-copilot/
-├─ app.py                       # Streamlit UI（HTTP 调后端）
+├─ app.py                       # Streamlit UI，直接调用 service
 ├─ fieldops/
-│  ├─ main.py                   # FastAPI + auth middleware
 │  ├─ agent.py                  # create_agent + 模型选择
 │  ├─ mock_llm.py               # 无 API Key 时的确定性产品顾问模型
 │  ├─ rag.py                    # Chroma + 哈希 embedding + 产品文档引用
@@ -312,7 +281,7 @@ fieldops-copilot/
 │  ├─ e2e_questions.jsonl
 │  ├─ run_eval.py
 │  └─ run_e2e.py
-├─ tests/                       # 13 个用例
+├─ tests/                       # 10 个用例
 ├─ requirements.txt
 ├─ run.ps1
 ├─ pytest.ini
@@ -323,10 +292,10 @@ fieldops-copilot/
 
 ## 安全与边界
 
-- 默认 `FIELDOPS_API_KEY` 为空时鉴权关闭，仅适合本地开发。
+- 没有登录、没有 API Key：这是本地单机 Demo，默认所有历史会话共用同一个 SQLite。
+- 如果部署到多人环境，需要自己加用户 ID / 登录 / 权限。
 - 产品资料来自公开页面并做了摘要，具体版本、价格、兼容性以星环科技官方资料为准。
 - 演示数据中的客户名称均为匿名化/虚构，不代表真实客户。
-- 审计日志会记录消息前 160 字；生产环境应做 PII 脱敏。
 - `HttpHistoryAdapter` / `HttpCatalogAdapter` 是适配器骨架，未对接真实历史服务/产品目录。
 - 真实模型路径未验证；离线 mock 模型只覆盖预设场景。
 
@@ -339,7 +308,7 @@ fieldops-copilot/
 - 基于 LangChain 1.x `create_agent` 构建星环产品选型 Agent，统一调度 Chroma RAG 和 5 个产品工具，完成“需求澄清 → 产品对比 → 案例/兼容性”的闭环。
 - 设计产品资料 RAG 链路，按章节切分并保留产品、版本、页码元数据；16 条检索评测 Recall@4 为 16/16，20 条端到端评测 citation/answer/history 均 20/20。
 - 将历史会话封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露保存/查询会话；抽象 `mcp/http/local` 三种历史适配器。
-- 使用 FastAPI + Streamlit 实现前后端分离 Demo，加入 API Key 鉴权、request_id 审计日志；13 个 pytest 用例覆盖 RAG、工具、MCP、鉴权、审计与适配器。
+- 使用 Streamlit 实现单进程本地 Demo，支持产品选型、引用来源、工具调用轨迹和历史会话回看；10 个 pytest 用例覆盖 RAG、工具、MCP 与适配器。
 
 > 指标请写你实测的数字；当前评测是小样本合成集，面试时主动说明语料规模和 mock 模型限制。
 
@@ -349,10 +318,10 @@ fieldops-copilot/
 
 - [x] v0.1：Streamlit UI + Mock 流程
 - [x] v0.2：Chroma RAG + 产品工具 + LangChain Agent
-- [x] v1.0：PDF 入库 + 历史会话 + MCP + 鉴权/审计
+- [x] v1.0：PDF 入库 + 历史会话 + MCP
 - [ ] v1.1：真实模型端到端评测
 - [ ] v1.2：接入真实产品目录/历史服务 API
-- [ ] v1.3：多语言、权限分级、可观测性
+- [ ] v1.3：多用户历史隔离、权限分级
 
 ---
 

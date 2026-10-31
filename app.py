@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-import os
+import asyncio
 from datetime import datetime
-from typing import Any
 from uuid import uuid4
 
-import httpx
 import streamlit as st
 
-API_URL = os.getenv("FIELDOPS_API_URL", "http://127.0.0.1:8000")
-API_KEY = os.getenv("FIELDOPS_API_KEY", "")
+from fieldops.service import chat as service_chat
+from fieldops.service import list_history
 
 
 def new_session_id() -> str:
     return f"SESS-{datetime.now():%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
+
+
+def run(coro):
+    return asyncio.run(coro)
 
 
 st.set_page_config(
@@ -91,49 +93,6 @@ if "messages" not in st.session_state:
             "mode": "",
         }
     ]
-if "api_url" not in st.session_state:
-    st.session_state.api_url = API_URL
-if "api_key" not in st.session_state:
-    st.session_state.api_key = API_KEY
-
-
-@st.cache_data(ttl=5, show_spinner=False)
-def fetch_health(url: str) -> dict[str, Any] | None:
-    try:
-        response = httpx.get(f"{url.rstrip('/')}/health", timeout=5)
-        response.raise_for_status()
-        return response.json()
-    except Exception:
-        return None
-
-
-def post_chat(
-    url: str, message: str, session_id: str, company: str, industry: str, key: str
-) -> dict[str, Any]:
-    response = httpx.post(
-        f"{url.rstrip('/')}/chat",
-        json={
-            "message": message,
-            "session_id": session_id,
-            "company": company,
-            "industry": industry,
-        },
-        headers={"X-API-Key": key} if key else {},
-        timeout=90,
-    )
-    response.raise_for_status()
-    return response.json()
-
-
-def fetch_history(url: str, key: str, limit: int = 20) -> list[dict[str, Any]]:
-    response = httpx.get(
-        f"{url.rstrip('/')}/conversations",
-        params={"limit": limit},
-        headers={"X-API-Key": key} if key else {},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
 
 
 def render_header() -> None:
@@ -171,12 +130,6 @@ with st.sidebar:
         "导航", ["选型咨询", "历史会话", "技术栈"], label_visibility="collapsed"
     )
     st.divider()
-    api_url_input = st.text_input("后端地址", value=st.session_state.api_url)
-    if api_url_input != st.session_state.api_url:
-        st.session_state.api_url = api_url_input
-    st.session_state.api_key = st.text_input(
-        "API Key（可选）", value=st.session_state.api_key, type="password"
-    )
     company = st.text_input("客户公司", value="某城商行")
     industry = st.selectbox(
         "行业", ["金融", "政务", "能源", "制造", "交通", "运营商", "其他"], index=0
@@ -188,20 +141,7 @@ with st.sidebar:
         st.session_state.messages = st.session_state.messages[:1]
         st.rerun()
 
-    health = fetch_health(st.session_state.api_url)
-    if health:
-        st.markdown(
-            f'<span class="badge-ok">● 后端已连接</span> '
-            f'<span class="muted">模式：{health.get("mode", "")}</span>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.error("后端未连接")
-        st.caption("先运行：uvicorn fieldops.main:app --port 8000")
-
-    if st.button("刷新连接", use_container_width=True):
-        fetch_health.clear()
-        st.rerun()
+    st.caption("本地直连 · 历史会话保存在本机 SQLite")
 
 render_header()
 
@@ -242,24 +182,25 @@ def render_chat() -> None:
         st.markdown(prompt)
 
     try:
-        data = post_chat(
-            st.session_state.api_url,
-            prompt,
-            st.session_state.session_id,
-            company,
-            industry,
-            st.session_state.api_key,
+        data = run(
+            service_chat(
+                prompt,
+                session_id=st.session_state.session_id,
+                company=company,
+                industry=industry,
+            )
         )
     except Exception as exc:
-        st.error(f"后端调用失败：{exc}")
+        st.error(f"调用失败：{exc}")
         return
 
+    payload = data.model_dump()
     assistant_message = {
         "role": "assistant",
-        "content": data.get("answer", ""),
-        "citations": data.get("citations", []),
-        "tools": data.get("tool_trace", []),
-        "mode": data.get("mode", ""),
+        "content": payload["answer"],
+        "citations": payload["citations"],
+        "tools": payload["tool_trace"],
+        "mode": payload["mode"],
     }
     st.session_state.messages.append(assistant_message)
 
@@ -282,8 +223,8 @@ def render_chat() -> None:
                     st.markdown(f"**{tool.get('name', '')}**")
                     st.json(tool.get("result", {}))
 
-    if data.get("conversation_id"):
-        st.caption(f"已保存历史会话：`{data['conversation_id']}`")
+    if payload.get("conversation_id"):
+        st.caption(f"已保存历史会话：`{payload['conversation_id']}`")
 
 
 def render_history() -> None:
@@ -292,9 +233,7 @@ def render_history() -> None:
     if st.button("刷新历史", use_container_width=False):
         st.rerun()
     try:
-        items = fetch_history(
-            st.session_state.api_url, st.session_state.api_key, limit=30
-        )
+        items = run(list_history(limit=30))
     except Exception as exc:
         st.error(f"读取历史失败：{exc}")
         return
@@ -363,7 +302,7 @@ def render_stack() -> None:
     st.markdown("### 运行架构")
     st.code(
         "Streamlit UI\n"
-        "  -> FastAPI /chat\n"
+        "  -> fieldops.service.chat\n"
         "    -> LangChain create_agent\n"
         "      -> Chroma RAG (search_knowledge)\n"
         "      -> Native tools (list/compare/cases/compatibility)\n"
