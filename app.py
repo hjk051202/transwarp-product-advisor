@@ -145,12 +145,29 @@ with st.sidebar:
 
 render_header()
 
+SMALL_MARKER = "<!-- SMALL -->"
+
+
+def render_answer(text: str) -> None:
+    """Render the main answer normally and footnotes in smaller gray text."""
+    main, _, small = text.partition(SMALL_MARKER)
+    st.markdown(main.strip())
+    if small.strip():
+        lines = []
+        for line in small.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("### "):
+                lines.append(f"**{stripped[4:]}**")
+            elif stripped:
+                lines.append(stripped)
+        st.caption("\n".join(lines))
+
 
 def render_chat() -> None:
     st.caption(f"客户：{company} · 行业：{industry} · 会话：{st.session_state.session_id}")
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            render_answer(message["content"])
             if message.get("mode"):
                 st.caption(f"mode: {message['mode']}")
             citations = message.get("citations") or []
@@ -205,7 +222,7 @@ def render_chat() -> None:
     st.session_state.messages.append(assistant_message)
 
     with st.chat_message("assistant"):
-        st.markdown(assistant_message["content"])
+        render_answer(assistant_message["content"])
         st.caption(f"mode: {assistant_message['mode']}")
         if assistant_message["citations"]:
             with st.expander(f"引用来源（{len(assistant_message['citations'])}）"):
@@ -247,7 +264,8 @@ def render_history() -> None:
         with st.expander(f"{title} · {item.get('created_at', '')}"):
             st.caption(f"session_id: {item.get('session_id', '')}")
             st.markdown(f"**用户**：{item.get('user_message', '')}")
-            st.markdown(f"**助手**：{item.get('assistant_message', '')}")
+            st.markdown("**助手**：")
+            render_answer(item.get("assistant_message", ""))
             citations = item.get("citations") or []
             if citations:
                 st.caption(f"引用 {len(citations)} 条")

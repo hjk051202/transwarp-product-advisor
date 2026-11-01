@@ -118,11 +118,13 @@ class ProductAdvisorModel(BaseChatModel):
         product_list = self._latest(messages, "list_products")
         results = knowledge.get("results", []) if knowledge else []
 
-        lines: list[str] = []
+        is_combo_query = "组合" in query or (
+            bool(results) and results[0].get("doc_id") == "tw-selection-guide"
+        )
         if comparison:
             left = comparison["product_a"]
             right = comparison["product_b"]
-            lines.append("### 选型建议")
+            lines = ["### 选型建议"]
             lines.append(
                 f"- **{left['product']}**：{left['one_liner']}  \n"
                 f"  适合：{'、'.join(left['workloads'][:4])}"
@@ -132,7 +134,12 @@ class ProductAdvisorModel(BaseChatModel):
                 f"  适合：{'、'.join(right['workloads'][:4])}"
             )
             lines.append(f"\n{comparison.get('decision_hint', '')}")
-        elif product_list:
+            return self._with_footnotes(lines, results, cases, compat, query=query)
+        if is_combo_query:
+            return self._combination_answer(results)
+
+        lines = []
+        if product_list:
             lines.append("### 星环产品线")
             for item in product_list[:8]:
                 lines.append(f"- **{item['product']}**：{item['one_liner']}")
@@ -143,6 +150,48 @@ class ProductAdvisorModel(BaseChatModel):
             lines.append("### 先明确需求")
             lines.append("请补充业务负载、数据量、部署环境和国产化要求，我再给出选型建议。")
 
+        return self._with_footnotes(lines, results, cases, compat, query=query)
+
+    @staticmethod
+    def _combination_answer(results: list[dict[str, Any]]) -> str:
+        lines = [
+            "### 常见组合",
+            "- **ArgoDB + TDH**：TDH 做数据湖和多模加工，ArgoDB 做高性能分析。",
+            "- **TDH + StellarDB + Sophon**：TDH 做平台底座，StellarDB 做图谱，Sophon 做 AI 建模。",
+            "- **TDC + ArgoDB**：TDC 提供多租户数据云，ArgoDB 提供分析型数据库服务。",
+            "- **KunDB + ArgoDB**：KunDB 承担交易，ArgoDB 承担分析，形成交易/分析分离。",
+            "",
+            "### 分析过程",
+            "这些组合不是拍脑袋，而是按“谁做底座、谁做分析、谁做图/AI、谁做交易”拆出来的：",
+            "1. **数据湖 + 高性能分析**：TDH 负责数据湖、多模加工和实时流；ArgoDB 负责报表、实时分析和 HTAP。",
+            "2. **平台 + 图谱 + AI**：TDH 做平台底座，StellarDB 做多层关系图谱，Sophon 做机器学习和知识图谱建模。",
+            "3. **多租户 + 分析服务**：TDC 提供多租户数据云和平台运营能力，ArgoDB 以分析型数据库服务对外提供查询。",
+            "4. **交易 + 分析**：KunDB 承担高并发 OLTP 交易，ArgoDB 承担分析，避免交易库被分析查询拖垮。",
+            "",
+            "<!-- SMALL -->",
+            "### 回答原则",
+            "- 先澄清业务负载，不要一上来就报产品名。",
+            "- 不要只推最贵的产品，要说明“为什么不是另一个”。",
+            "- 涉及具体版本、兼容性、报价时，明确说“需以官方兼容性列表和售前确认为准”。",
+        ]
+        if results:
+            lines.append("### 依据")
+            for item in results[:4]:
+                page = f"p.{item['page']}" if item.get("page") else ""
+                lines.append(
+                    f"- {item.get('title', '')} {item.get('section', '')} "
+                    f"{page}（{item.get('doc_id', '')}）"
+                )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _with_footnotes(
+        lines: list[str],
+        results: list[dict[str, Any]],
+        cases: dict[str, Any],
+        compat: dict[str, Any],
+        query: str = "",
+    ) -> str:
         if cases.get("cases"):
             lines.append("\n### 相关案例")
             for case in cases["cases"][:2]:
@@ -158,7 +207,8 @@ class ProductAdvisorModel(BaseChatModel):
             lines.append(compat.get("note", "具体版本以官方兼容性列表为准。"))
 
         if results:
-            lines.append("\n### 依据")
+            lines.append("\n<!-- SMALL -->")
+            lines.append("### 依据")
             for item in results[:4]:
                 page = f"p.{item['page']}" if item.get("page") else ""
                 lines.append(
@@ -198,6 +248,7 @@ class ProductAdvisorModel(BaseChatModel):
                 "区别",
                 "对比",
                 "案例",
+                "组合",
                 "国产化",
                 "兼容",
                 "报价",
