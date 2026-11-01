@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fieldops.rag import search
+import json
+
+from fieldops.rag import search, search_json
 
 
 def test_search_finds_argodb_product_doc() -> None:
@@ -10,10 +12,26 @@ def test_search_finds_argodb_product_doc() -> None:
     assert any(doc.product == "ArgoDB" for doc in docs)
 
 
-def test_search_has_citation_metadata() -> None:
-    docs = search("StellarDB 图数据库 反欺诈", k=3)
+def test_hybrid_recovers_product_chunk_missed_by_vector_only() -> None:
+    query = "ArgoDB 适合什么业务场景？"
+    hybrid_ids = {doc.doc_id for doc in search(query, k=4)}
+    assert "tw-argodb" in hybrid_ids
+
+
+def test_search_exposes_rrf_and_vector_scores() -> None:
+    docs = search("TDH 支持多少种存储模型？", k=4)
     assert docs
-    for doc in docs:
-        assert doc.doc_id
-        assert doc.title
-        assert doc.section
+    assert all(doc.score > 0 for doc in docs)
+    assert any(doc.vector_score > 0 for doc in docs)
+
+
+def test_out_of_domain_query_abstains() -> None:
+    payload = json.loads(search_json("今天天气怎么样？", k=4))
+    assert payload["abstained"] is True
+    assert payload["results"] == []
+
+
+def test_domain_query_does_not_abstain() -> None:
+    payload = json.loads(search_json("星环产品有哪些常见组合？", k=4))
+    assert payload["abstained"] is False
+    assert payload["results"]

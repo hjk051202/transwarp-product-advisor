@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from fieldops.db import create_conversation
 from fieldops.integrations import build_catalog_adapter, build_history_adapter
 
 
@@ -22,19 +21,22 @@ def test_json_catalog_adapter() -> None:
 @pytest.mark.asyncio
 async def test_local_history_adapter(monkeypatch) -> None:
     monkeypatch.setenv("HISTORY_ADAPTER", "local")
-    created = create_conversation(
-        conversation_id="CONV-adapter-test",
-        session_id="SESS-adapter",
-        user_message="ArgoDB 和 TDH 怎么选？",
-        assistant_message="建议根据报表/数仓需求选型。",
-        citations=[],
-        tool_trace=[],
-        mode="offline",
-    )
     adapter = build_history_adapter()
-    fetched = await adapter.get_conversation(created["conversation_id"])
+    saved = await adapter.save_conversation(
+        {
+            "session_id": "SESS-adapter",
+            "user_message": "ArgoDB 和 TDH 怎么选？",
+            "assistant_message": "建议根据报表/数仓需求选型。",
+            "citations": [],
+            "tool_trace": [],
+            "mode": "offline",
+        }
+    )
+    assert saved["conversation_id"].startswith("CONV-")
+
+    fetched = await adapter.get_conversation(saved["conversation_id"])
     assert fetched is not None
     assert fetched["session_id"] == "SESS-adapter"
 
     items = await adapter.list_conversations(limit=10)
-    assert any(item["conversation_id"] == "CONV-adapter-test" for item in items)
+    assert any(item["conversation_id"] == saved["conversation_id"] for item in items)

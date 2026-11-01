@@ -23,8 +23,8 @@ def _dumps(data: object) -> str:
 def search_knowledge(query: str) -> str:
     """检索星环产品资料、选型指南、案例和兼容性说明。
 
-    当需要产品定位、适用场景、案例或国产化兼容性依据时使用。
-    返回结果包含 doc_id、产品、章节、页码和原文片段，回答时应引用。
+    使用向量 + BM25 混合召回与 RRF 融合，需要产品定位、适用场景、
+    案例或国产化兼容性依据时使用。返回 doc_id、产品、章节、页码和片段。
 
     Args:
         query: 检索关键词，例如 ArgoDB TDH 数据仓库 选型。

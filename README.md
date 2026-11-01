@@ -15,7 +15,7 @@
 
 已实现：
 
-- **RAG**：12 份知识文档（10 份 Markdown + 2 份 PDF），Chroma 检索 + 关键词/产品重排 + 页码引用
+- **RAG**：12 份知识文档（10 份 Markdown + 2 份 PDF），Chroma + BM25 混合检索 + RRF 融合 + 可选 cross-encoder 重排 + 页码引用
 - **Tool Calling**：5 个 LangChain 原生工具
   - `search_knowledge`
   - `list_products`
@@ -28,9 +28,9 @@
 - **Streamlit 直连**：UI 直接调用 `fieldops.service`，没有 FastAPI、没有 HTTP API、没有 API Key
 - **审计日志**：内部记录 request_id、actor、action、resource、detail（当前没有单独的审计页面）
 - **适配层**：历史会话支持 `mcp / http / local`，产品目录支持 `json / http`
-- **测试**：10 个 pytest 用例通过
+- **测试**：13 个 pytest 用例通过
 - **评测**：
-  - RAG：16 条问题，Recall@4 = 16/16
+  - RAG：16 条问题，纯向量 Recall@4 = 11/16，混合检索 Recall@4 = 16/16
   - 端到端：20 条问题，citation/answer/history 均 20/20
 
 > 没有模型 API Key 时，项目使用 `ProductAdvisorModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
@@ -194,6 +194,11 @@ streamlit run app.py
 | `HISTORY_HTTP_URL` | `http://127.0.0.1:9000` | 真实历史服务地址 |
 | `CATALOG_ADAPTER` | `json` | `json` / `http` |
 | `CATALOG_HTTP_URL` | `http://127.0.0.1:9100` | 真实产品目录地址 |
+| `RAG_SCORE_THRESHOLD` | `0.30` | 向量相关性拒答阈值 |
+| `RERANK_ENABLED` | `0` | 是否启用 cross-encoder 重排 |
+| `RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` | 重排模型 |
+| `RERANK_BASE_URL` | `https://api.siliconflow.cn/v1` | 重排接口 |
+| `RERANK_API_KEY` | 空 | 重排 API Key |
 | `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8765` | MCP 监听地址 |
 
 真实模型：
@@ -211,6 +216,7 @@ streamlit run app.py
 
 ```bash
 python eval/run_eval.py
+python eval/compare_retrieval.py
 ```
 
 当前：
@@ -218,7 +224,18 @@ python eval/run_eval.py
 ```text
 Recall@4 (doc)  = 16/16 = 100.00%
 Page hit@4      = 16/16 = 100.00%
+
+vector Recall@4 = 11/16 = 68.75%
+hybrid Recall@4 = 16/16 = 100.00%
 ```
+
+RAG 优化点：
+
+1. **BM25 + 向量混合召回**：向量负责语义相近，BM25 负责产品名、数字、专有名词的精确匹配。
+2. **RRF 融合**：只融合两路排名，不直接相加余弦分和 BM25 分，避免量纲不一致。
+3. **产品/选型指南加权**：问题里出现产品名时给对应产品文档小加权；问“组合/定位”时给选型指南加权。
+4. **可选 cross-encoder 重排**：配置 `RERANK_ENABLED=1` 后调用 `bge-reranker-v2-m3`，未配置或接口失败时回退 RRF 顺序。
+5. **拒答**：问题不在星环产品域，或向量相关性低于 `RAG_SCORE_THRESHOLD` 时，返回“知识库未命中”，不硬编答案。
 
 ### 端到端
 
@@ -242,7 +259,7 @@ history_saved   = 20/20 = 100.00%
 pytest -q
 ```
 
-当前：`10 passed`（启动 history MCP 时）；MCP 未启动时 `9 passed, 1 skipped`。
+当前：`13 passed`（启动 history MCP 时）；MCP 未启动时 `12 passed, 1 skipped`。
 
 ---
 
@@ -254,7 +271,9 @@ fieldops-copilot/
 ├─ fieldops/
 │  ├─ agent.py                  # create_agent + 模型选择
 │  ├─ mock_llm.py               # 无 API Key 时的确定性产品顾问模型
-│  ├─ rag.py                    # Chroma + 哈希 embedding + 产品文档引用
+│  ├─ rag.py                    # Chroma + 哈希 embedding + 混合检索 + 引用
+│  ├─ retrieval.py              # BM25 + RRF 融合
+│  ├─ reranker.py               # 可选 cross-encoder 重排
 │  ├─ ingest.py                 # 语料统计与索引重建
 │  ├─ tools.py                  # 5 个产品选型工具
 │  ├─ history_client.py         # langchain-mcp-adapters（history）
@@ -280,8 +299,9 @@ fieldops-copilot/
 │  ├─ questions.jsonl
 │  ├─ e2e_questions.jsonl
 │  ├─ run_eval.py
+│  ├─ compare_retrieval.py      # 纯向量 vs 混合检索
 │  └─ run_e2e.py
-├─ tests/                       # 10 个用例
+├─ tests/                       # 13 个用例
 ├─ requirements.txt
 ├─ run.ps1
 ├─ pytest.ini
@@ -305,10 +325,11 @@ fieldops-copilot/
 
 **星环产品选型助手｜LangChain + RAG + Tool Calling + MCP｜个人项目**
 
-- 基于 LangChain 1.x `create_agent` 构建星环产品选型 Agent，统一调度 Chroma RAG 和 5 个产品工具，完成“需求澄清 → 产品对比 → 案例/兼容性”的闭环。
-- 设计产品资料 RAG 链路，按章节切分并保留产品、版本、页码元数据；16 条检索评测 Recall@4 为 16/16，20 条端到端评测 citation/answer/history 均 20/20。
+- 基于 LangChain 1.x `create_agent` 构建星环产品选型 Agent，统一调度 RAG 和 5 个产品工具，完成“需求澄清 → 产品对比 → 案例/兼容性”的闭环。
+- 将 RAG 从纯向量升级为 **BM25 + 向量混合检索**，用 **RRF** 融合两路排名，并加入产品词/选型指南加权、领域拒答和可选 cross-encoder 重排；自建对比评测中 Recall@4 从 11/16 提升到 16/16。
+- 设计产品资料 RAG 链路，按章节切分并保留产品、版本、页码元数据；20 条端到端评测 citation/answer/history 均 20/20。
 - 将历史会话封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露保存/查询会话；抽象 `mcp/http/local` 三种历史适配器。
-- 使用 Streamlit 实现单进程本地 Demo，支持产品选型、引用来源、工具调用轨迹和历史会话回看；10 个 pytest 用例覆盖 RAG、工具、MCP 与适配器。
+- 使用 Streamlit 实现单进程本地 Demo，支持产品选型、引用来源、工具调用轨迹和历史会话回看；13 个 pytest 用例覆盖 RAG、工具、MCP 与适配器。
 
 > 指标请写你实测的数字；当前评测是小样本合成集，面试时主动说明语料规模和 mock 模型限制。
 
@@ -319,9 +340,10 @@ fieldops-copilot/
 - [x] v0.1：Streamlit UI + Mock 流程
 - [x] v0.2：Chroma RAG + 产品工具 + LangChain Agent
 - [x] v1.0：PDF 入库 + 历史会话 + MCP
-- [ ] v1.1：真实模型端到端评测
-- [ ] v1.2：接入真实产品目录/历史服务 API
-- [ ] v1.3：多用户历史隔离、权限分级
+- [x] v1.1：BM25 + RRF 混合检索 + 可选重排 + 拒答
+- [ ] v1.2：真实模型端到端评测
+- [ ] v1.3：接入真实产品目录/历史服务 API
+- [ ] v1.4：多用户历史隔离、权限分级
 
 ---
 

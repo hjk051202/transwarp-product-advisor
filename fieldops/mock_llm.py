@@ -117,6 +117,12 @@ class ProductAdvisorModel(BaseChatModel):
         compat = self._latest(messages, "check_compatibility")
         product_list = self._latest(messages, "list_products")
         results = knowledge.get("results", []) if knowledge else []
+        if knowledge.get("abstained"):
+            return (
+                "### 知识库未命中\n"
+                "知识库中没有找到与这个问题足够相关的内容。"
+                "可以补充具体产品名、行业或场景，我再查一次。"
+            )
 
         is_combo_query = "组合" in query or (
             bool(results) and results[0].get("doc_id") == "tw-selection-guide"

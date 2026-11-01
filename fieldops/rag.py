@@ -1,11 +1,16 @@
-"""Offline-friendly RAG over public Transwarp product materials."""
+"""Offline-friendly RAG over public Transwarp product materials.
+
+The retrieval path is intentionally explicit:
+  Markdown/PDF -> chunks -> HashingEmbeddings -> Chroma
+  query -> vector recall + BM25 recall -> RRF fusion -> optional rerank
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import math
-import re
+import os
 import shutil
 from dataclasses import dataclass
 from functools import lru_cache
@@ -18,16 +23,50 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from fieldops.config import CHROMA_DIR
 from fieldops.data import all_knowledge
+from fieldops.reranker import RERANK_CANDIDATES, RerankService, is_enabled as rerank_enabled
+from fieldops.retrieval import HybridRetriever, doc_key, tokenize
 
-_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-_.]*|[\u4e00-\u9fff]")
+SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.30"))
+DOMAIN_TERMS = [
+    "星环",
+    "产品",
+    "选型",
+    "数据库",
+    "数据仓库",
+    "数据湖",
+    "报表",
+    "分析",
+    "实时",
+    "交易",
+    "oltp",
+    "htap",
+    "图",
+    "知识图谱",
+    "ai",
+    "机器学习",
+    "国产化",
+    "信创",
+    "麒麟",
+    "统信",
+    "鲲鹏",
+    "海光",
+    "兼容",
+    "案例",
+    "报价",
+    "poc",
+    "试用",
+    "argodb",
+    "tdh",
+    "tdc",
+    "sophon",
+    "stellardb",
+    "kundb",
+]
 
 
-def tokenize(text: str) -> list[str]:
-    lowered = text.lower()
-    tokens = _TOKEN_RE.findall(lowered)
-    han = [t for t in tokens if len(t) == 1 and "\u4e00" <= t <= "\u9fff"]
-    bigrams = [han[i] + han[i + 1] for i in range(len(han) - 1)]
-    return tokens + bigrams
+def is_domain_query(query: str) -> bool:
+    lowered = query.lower()
+    return any(term in lowered for term in DOMAIN_TERMS)
 
 
 class HashingEmbeddings(Embeddings):
@@ -64,6 +103,8 @@ class RetrievedDoc:
     version: str | None
     text: str
     score: float
+    vector_score: float = 0.0
+    rerank_score: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -75,6 +116,10 @@ class RetrievedDoc:
             "version": self.version,
             "snippet": self.text[:700],
             "score": round(self.score, 4),
+            "vector_score": round(self.vector_score, 4),
+            "rerank_score": (
+                round(self.rerank_score, 4) if self.rerank_score is not None else None
+            ),
         }
 
 
@@ -128,49 +173,104 @@ def get_vectorstore() -> Chroma:
     return store
 
 
-def _keyword_score(query: str, text: str) -> float:
-    q = set(tokenize(query))
-    d = set(tokenize(text))
-    if not q or not d:
-        return 0.0
-    coverage = len(q & d) / len(q)
-    for term in ["argodb", "tdh", "tdc", "sophon", "stellardb", "kundb"]:
-        if term in query.lower() and term in text.lower():
-            coverage += 0.2
-    return min(coverage, 1.0)
+@lru_cache(maxsize=1)
+def get_retriever() -> HybridRetriever:
+    return HybridRetriever(get_vectorstore())
+
+
+@lru_cache(maxsize=1)
+def get_reranker() -> RerankService | None:
+    if not rerank_enabled():
+        return None
+    try:
+        return RerankService()
+    except Exception:
+        return None
+
+
+def _to_retrieved(
+    doc: Document,
+    *,
+    score: float,
+    vector_score: float = 0.0,
+    rerank_score: float | None = None,
+) -> RetrievedDoc:
+    metadata = doc.metadata or {}
+    return RetrievedDoc(
+        doc_id=str(metadata.get("doc_id", "")),
+        title=str(metadata.get("title", "")),
+        product=str(metadata.get("product", "")),
+        section=str(metadata.get("section", "")),
+        page=metadata.get("page") if isinstance(metadata.get("page"), int) else None,
+        version=str(metadata.get("version")) if metadata.get("version") else None,
+        text=doc.page_content,
+        score=score,
+        vector_score=vector_score,
+        rerank_score=rerank_score,
+    )
+
+
+def search_with_meta(query: str, k: int = 4) -> tuple[list[RetrievedDoc], float, bool]:
+    """Return (documents, best vector relevance, abstained)."""
+
+    retriever = get_retriever()
+    reranker = get_reranker()
+    candidates = max(k, RERANK_CANDIDATES) if reranker is not None else max(k * 3, 12)
+    hits, best_vector_score = retriever.search(query, k=candidates)
+
+    if reranker is not None and hits:
+        reranked = reranker.rerank(query, [hit.doc for hit in hits], top_n=k)
+        vector_scores = {doc_key(hit.doc): hit.vector_score for hit in hits}
+        docs = [
+            _to_retrieved(
+                doc,
+                score=rerank_score,
+                vector_score=vector_scores.get(doc_key(doc), 0.0),
+                rerank_score=rerank_score,
+            )
+            for doc, rerank_score in reranked
+        ]
+    else:
+        docs = [
+            _to_retrieved(
+                hit.doc,
+                score=hit.score,
+                vector_score=hit.vector_score,
+            )
+            for hit in hits[:k]
+        ]
+
+    abstained = (not is_domain_query(query)) or best_vector_score < SCORE_THRESHOLD
+    return docs, best_vector_score, abstained
 
 
 def search(query: str, k: int = 4) -> list[RetrievedDoc]:
-    raw = get_vectorstore().similarity_search_with_score(query, k=max(k * 3, 12))
-    results: list[RetrievedDoc] = []
-    for document, distance in raw:
-        vector_score = max(0.0, 1.0 - float(distance) / 2.0)
-        metadata = document.metadata
-        product = str(metadata.get("product", ""))
-        product_bonus = 0.25 if product.lower() in query.lower() else 0.0
-        combined = (
-            0.6 * vector_score
-            + 0.25 * _keyword_score(query, document.page_content)
-            + product_bonus
+    docs, _, _ = search_with_meta(query, k=k)
+    return docs
+
+
+def vector_only_search(query: str, k: int = 4) -> list[RetrievedDoc]:
+    """Baseline used by the retrieval comparison script."""
+
+    raw = get_vectorstore().similarity_search_with_score(query, k=k)
+    return [
+        _to_retrieved(
+            doc,
+            score=max(0.0, 1.0 - float(distance) / 2.0),
+            vector_score=max(0.0, 1.0 - float(distance) / 2.0),
         )
-        results.append(
-            RetrievedDoc(
-                doc_id=str(metadata.get("doc_id", "")),
-                title=str(metadata.get("title", "")),
-                product=str(metadata.get("product", "")),
-                section=str(metadata.get("section", "")),
-                page=metadata.get("page") if isinstance(metadata.get("page"), int) else None,
-                version=str(metadata.get("version")) if metadata.get("version") else None,
-                text=document.page_content,
-                score=combined,
-            )
-        )
-    results.sort(key=lambda item: item.score, reverse=True)
-    return results[:k]
+        for doc, distance in raw
+    ]
 
 
 def search_json(query: str, k: int = 4) -> str:
+    docs, best_vector_score, abstained = search_with_meta(query, k=k)
     return json.dumps(
-        {"query": query, "results": [doc.to_dict() for doc in search(query, k=k)]},
+        {
+            "query": query,
+            "abstained": abstained,
+            "best_vector_score": round(best_vector_score, 4),
+            "results": [] if abstained else [doc.to_dict() for doc in docs],
+        },
         ensure_ascii=False,
     )

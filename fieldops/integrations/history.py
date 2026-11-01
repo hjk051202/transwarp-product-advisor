@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 import httpx
 
@@ -29,6 +31,11 @@ class MCPHistoryAdapter:
 
 class LocalHistoryAdapter:
     async def save_conversation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(payload)
+        payload.setdefault(
+            "conversation_id",
+            f"CONV-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:4]}",
+        )
         return create_conversation(**payload)
 
     async def get_conversation(self, conversation_id: str) -> dict[str, Any] | None:
