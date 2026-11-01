@@ -217,6 +217,7 @@ streamlit run app.py
 ```bash
 python eval/run_eval.py
 python eval/compare_retrieval.py
+python eval/compare_retrieval.py --questions eval/holdout_questions.jsonl
 ```
 
 当前：
@@ -227,6 +228,10 @@ Page hit@4      = 16/16 = 100.00%
 
 vector Recall@4 = 11/16 = 68.75%
 hybrid Recall@4 = 16/16 = 100.00%
+
+holdout（14 条改写问题）:
+vector Recall@4 = 14/14 = 100.00%
+hybrid Recall@4 = 14/14 = 100.00%
 ```
 
 RAG 优化点：
@@ -297,6 +302,7 @@ fieldops-copilot/
 │  └─ generate_pdfs.py          # 生成演示 PDF
 ├─ eval/
 │  ├─ questions.jsonl
+│  ├─ holdout_questions.jsonl  # 14 条改写问题，验证不退化
 │  ├─ e2e_questions.jsonl
 │  ├─ run_eval.py
 │  ├─ compare_retrieval.py      # 纯向量 vs 混合检索

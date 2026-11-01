@@ -1,0 +1,14 @@
+{"id": "h01", "question": "ArgoDB 能替代 Hadoop 和 MPP 混合架构吗？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "h02", "question": "TDH 的存储引擎和多模能力有哪些？", "expected_doc": "tw-tdh", "expected_page": 1}
+{"id": "h03", "question": "TDC 的数据 PaaS 和分析 PaaS 分别做什么？", "expected_doc": "tw-tdc", "expected_page": 1}
+{"id": "h04", "question": "Sophon 的四个子产品分别是什么？", "expected_doc": "tw-sophon", "expected_page": 1}
+{"id": "h05", "question": "StellarDB 能查多深的关系？", "expected_doc": "tw-stellardb", "expected_page": 1}
+{"id": "h06", "question": "KunDB 适不适合核心交易系统？", "expected_doc": "tw-kundb", "expected_page": 1}
+{"id": "h07", "question": "银行审计和资金流向用什么产品？", "expected_doc": "tw-finance-cases", "expected_page": 1}
+{"id": "h08", "question": "麒麟操作系统和鲲鹏 CPU 能部署星环产品吗？", "expected_doc": "tw-compatibility", "expected_page": 1}
+{"id": "h09", "question": "ArgoDB 和 TDH 能组合使用吗？", "expected_doc": "tw-selection-guide", "expected_page": 1}
+{"id": "h10", "question": "POC 和报价一般怎么推进？", "expected_doc": "tw-faq", "expected_page": 1}
+{"id": "h11", "question": "TDH 支持实时流处理吗？", "expected_doc": "tw-tdh", "expected_page": 1}
+{"id": "h12", "question": "TDC 多租户怎么隔离资源？", "expected_doc": "tw-tdc", "expected_page": 1}
+{"id": "h13", "question": "ArgoDB 支持标准 SQL 吗？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "h14", "question": "Sophon 支持隐私计算吗？", "expected_doc": "tw-sophon", "expected_page": 1}

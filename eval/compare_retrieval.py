@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -20,9 +21,12 @@ def recall(hits: list, expected_doc: str | None) -> bool:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--questions", type=Path, default=QUESTIONS)
+    args = parser.parse_args()
     rows = [
         json.loads(line)
-        for line in QUESTIONS.read_text(encoding="utf-8").splitlines()
+        for line in args.questions.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     vector_hits = 0
