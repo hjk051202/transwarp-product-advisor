@@ -14,3 +14,13 @@
 {"id": "q14", "question": "Sophon 支持隐私计算吗？", "expected_doc": "tw-sophon", "expected_page": 1}
 {"id": "q15", "question": "TDC 和 TDH 的定位差异是什么？", "expected_doc": "tw-selection-guide", "expected_page": 1}
 {"id": "q16", "question": "ArgoDB overview PDF 讲了什么？", "expected_doc": "pdf-argodb", "expected_page": 1}
+{"id": "q17", "question": "TDH 的 11 种存储模型分别适合什么？", "expected_doc": "tw-tdh", "expected_page": 1}
+{"id": "q18", "question": "Sophon 的四个子产品分别解决什么问题？", "expected_doc": "tw-sophon", "expected_page": 1}
+{"id": "q19", "question": "StellarDB 支持 10 层关系查询吗？", "expected_doc": "tw-stellardb", "expected_page": 1}
+{"id": "q20", "question": "TDC 的 Data PaaS 和 Analytics PaaS 分别是什么？", "expected_doc": "tw-tdc", "expected_page": 1}
+{"id": "q21", "question": "ArgoDB 兼容 Oracle 和 MySQL 方言吗？", "expected_doc": "tw-argodb", "expected_page": 1}
+{"id": "q22", "question": "CentOS 7 上能部署星环产品吗？", "expected_doc": "tw-compatibility", "expected_page": 1}
+{"id": "q23", "question": "只有 GB 级数据，还需要上 TDH 吗？", "expected_doc": "tw-selection-guide", "expected_page": 1}
+{"id": "q24", "question": "KunDB 和 ArgoDB 怎么做交易与分析分离？", "expected_doc": "tw-selection-guide", "expected_page": 1}
+{"id": "q25", "question": "统信 UOS 和海光 CPU 支持吗？", "expected_doc": "tw-compatibility", "expected_page": 1}
+{"id": "q26", "question": "ArgoDB 的湖仓集一体是什么意思？", "expected_doc": "tw-argodb", "expected_page": 1}

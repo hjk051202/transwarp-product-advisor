@@ -30,7 +30,7 @@
 - **适配层**：历史会话支持 `mcp / http / local`，产品目录支持 `json / http`
 - **测试**：13 个 pytest 用例通过
 - **评测**：
-  - RAG：16 条问题，纯向量 Recall@4 = 11/16，混合检索 Recall@4 = 16/16
+  - RAG：26 条问题，纯向量 Recall@4 = 20/26，混合检索 Recall@4 = 25/26
   - 端到端：20 条问题，citation/answer/history 均 20/20
 
 > 没有模型 API Key 时，项目使用 `ProductAdvisorModel` 做确定性工具调用，**仍然走 LangChain `create_agent`**，所以离线可运行、可测试。配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 后自动切换真实模型。
@@ -223,16 +223,18 @@ python eval/compare_retrieval.py --questions eval/holdout_questions.jsonl
 当前：
 
 ```text
-Recall@4 (doc)  = 16/16 = 100.00%
-Page hit@4      = 16/16 = 100.00%
+Recall@4 (doc)  = 25/26 = 96.15%
+Page hit@4      = 25/26 = 96.15%
 
-vector Recall@4 = 11/16 = 68.75%
-hybrid Recall@4 = 16/16 = 100.00%
+vector Recall@4 = 20/26 = 76.92%
+hybrid Recall@4 = 25/26 = 96.15%
 
 holdout（14 条改写问题）:
 vector Recall@4 = 14/14 = 100.00%
 hybrid Recall@4 = 14/14 = 100.00%
 ```
+
+> 26 条里 `q23`（“只有 GB 级数据，还需要上 TDH 吗？”）未命中：Top-4 被 TDH 产品文档占据，选型指南没有进前四。没有为了凑 100% 调整期望。
 
 RAG 优化点：
 
@@ -332,7 +334,7 @@ fieldops-copilot/
 **星环产品选型助手｜LangChain + RAG + Tool Calling + MCP｜个人项目**
 
 - 基于 LangChain 1.x `create_agent` 构建星环产品选型 Agent，统一调度 RAG 和 5 个产品工具，完成“需求澄清 → 产品对比 → 案例/兼容性”的闭环。
-- 将 RAG 从纯向量升级为 **BM25 + 向量混合检索**，用 **RRF** 融合两路排名，并加入产品词/选型指南加权、领域拒答和可选 cross-encoder 重排；自建对比评测中 Recall@4 从 11/16 提升到 16/16。
+- 将 RAG 从纯向量升级为 **BM25 + 向量混合检索**，用 **RRF** 融合两路排名，并加入产品词/选型指南加权、领域拒答和可选 cross-encoder 重排；自建对比评测中 Recall@4 从 20/26 提升到 25/26。
 - 设计产品资料 RAG 链路，按章节切分并保留产品、版本、页码元数据；20 条端到端评测 citation/answer/history 均 20/20。
 - 将历史会话封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露保存/查询会话；抽象 `mcp/http/local` 三种历史适配器。
 - 使用 Streamlit 实现单进程本地 Demo，支持产品选型、引用来源、工具调用轨迹和历史会话回看；13 个 pytest 用例覆盖 RAG、工具、MCP 与适配器。
