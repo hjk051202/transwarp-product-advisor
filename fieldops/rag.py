@@ -142,6 +142,15 @@ def embedding_signature() -> str:
 def build_embeddings() -> Embeddings:
     """Select external OpenAI-compatible embeddings or offline hashing."""
 
+    if (
+        EMBEDDING_PROVIDER in {"openai", "openai-compatible"}
+        and not external_embeddings_enabled()
+    ):
+        raise RuntimeError(
+            "EMBEDDING_PROVIDER is external but "
+            "EMBEDDING_API_KEY/OPENAI_API_KEY is empty"
+        )
+
     if not external_embeddings_enabled():
         return HashingEmbeddings()
 
