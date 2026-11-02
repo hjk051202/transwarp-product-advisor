@@ -19,9 +19,18 @@ from typing import Any
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from fieldops.config import CHROMA_DIR
+from fieldops.config import (
+    CHROMA_DIR,
+    EMBEDDING_API_KEY,
+    EMBEDDING_BASE_URL,
+    EMBEDDING_DIMENSIONS,
+    EMBEDDING_MODEL,
+    EMBEDDING_PROVIDER,
+    OPENAI_API_KEY,
+)
 from fieldops.data import all_knowledge
 from fieldops.reranker import RERANK_CANDIDATES, RerankService, is_enabled as rerank_enabled
 from fieldops.retrieval import HybridRetriever, doc_key, tokenize
@@ -93,6 +102,62 @@ class HashingEmbeddings(Embeddings):
         return self._embed(text)
 
 
+def _embedding_key() -> str:
+    if EMBEDDING_PROVIDER == "openai":
+        return EMBEDDING_API_KEY or OPENAI_API_KEY
+    return EMBEDDING_API_KEY
+
+
+def _embedding_base_url() -> str:
+    if EMBEDDING_BASE_URL:
+        return EMBEDDING_BASE_URL
+    if EMBEDDING_PROVIDER == "openai":
+        return "https://api.openai.com/v1"
+    return "https://api.siliconflow.cn/v1"
+
+
+def _embedding_model() -> str:
+    if EMBEDDING_MODEL:
+        return EMBEDDING_MODEL
+    if EMBEDDING_PROVIDER == "openai":
+        return "text-embedding-3-small"
+    return "BAAI/bge-m3"
+
+
+def external_embeddings_enabled() -> bool:
+    if EMBEDDING_PROVIDER == "hashing":
+        return False
+    if EMBEDDING_PROVIDER in {"auto", "openai", "openai-compatible"}:
+        return bool(_embedding_key())
+    return False
+
+
+def embedding_signature() -> str:
+    if external_embeddings_enabled():
+        dimensions = EMBEDDING_DIMENSIONS or "native"
+        return f"openai:{_embedding_model()}:{_embedding_base_url()}:{dimensions}"
+    return "hashing:512"
+
+
+def build_embeddings() -> Embeddings:
+    """Select external OpenAI-compatible embeddings or offline hashing."""
+
+    if not external_embeddings_enabled():
+        return HashingEmbeddings()
+
+    kwargs: dict[str, Any] = {
+        "model": _embedding_model(),
+        "api_key": _embedding_key(),
+        "base_url": _embedding_base_url(),
+        # BGE / DashScope compatible endpoints are not tiktoken models.
+        "check_embedding_ctx_length": False,
+        "chunk_size": 64,
+    }
+    if EMBEDDING_DIMENSIONS:
+        kwargs["dimensions"] = int(EMBEDDING_DIMENSIONS)
+    return OpenAIEmbeddings(**kwargs)
+
+
 @dataclass
 class RetrievedDoc:
     doc_id: str
@@ -125,7 +190,10 @@ class RetrievedDoc:
 
 def _manifest() -> str:
     ids = sorted(item["id"] for item in all_knowledge())
-    return hashlib.sha256(json.dumps(ids, ensure_ascii=False).encode("utf-8")).hexdigest()
+    payload = {"docs": ids, "embedding": embedding_signature()}
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 def _make_chunks() -> list[Document]:
@@ -161,7 +229,7 @@ def get_vectorstore() -> Chroma:
 
     store = Chroma(
         collection_name="transwarp_knowledge",
-        embedding_function=HashingEmbeddings(),
+        embedding_function=build_embeddings(),
         persist_directory=str(CHROMA_DIR),
         collection_metadata={"hnsw:space": "cosine"},
     )

@@ -15,7 +15,7 @@
 
 已实现：
 
-- **RAG**：12 份知识文档（10 份 Markdown + 2 份 PDF），Chroma + BM25 混合检索 + RRF 融合 + 可选 cross-encoder 重排 + 页码引用
+- **RAG**：12 份知识文档（10 份 Markdown + 2 份 PDF），Chroma + BM25 混合检索 + RRF 融合 + 可选 cross-encoder 重排 + 页码引用；Embedding 默认离线 Hashing，可切 BGE-M3/OpenAI 兼容接口
 - **Tool Calling**：5 个 LangChain 原生工具
   - `search_knowledge`
   - `list_products`
@@ -195,6 +195,11 @@ streamlit run app.py
 | `CATALOG_ADAPTER` | `json` | `json` / `http` |
 | `CATALOG_HTTP_URL` | `http://127.0.0.1:9100` | 真实产品目录地址 |
 | `RAG_SCORE_THRESHOLD` | `0.30` | 向量相关性拒答阈值 |
+| `EMBEDDING_PROVIDER` | `auto` | `auto` / `hashing` / `openai` / `openai-compatible` |
+| `EMBEDDING_MODEL` | 按 provider 决定 | `auto` 默认 `BAAI/bge-m3`；`openai` 默认 `text-embedding-3-small` |
+| `EMBEDDING_BASE_URL` | 按 provider 决定 | `auto` 默认 SiliconFlow；`openai` 默认 OpenAI |
+| `EMBEDDING_API_KEY` | 空 | Embedding API Key；`openai` 模式可回退 `OPENAI_API_KEY` |
+| `EMBEDDING_DIMENSIONS` | 空 | 可选，指定向量维度 |
 | `RERANK_ENABLED` | `0` | 是否启用 cross-encoder 重排 |
 | `RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` | 重排模型 |
 | `RERANK_BASE_URL` | `https://api.siliconflow.cn/v1` | 重排接口 |
@@ -244,6 +249,39 @@ RAG 优化点：
 4. **可选 cross-encoder 重排**：配置 `RERANK_ENABLED=1` 后调用 `bge-reranker-v2-m3`，未配置或接口失败时回退 RRF 顺序。
 5. **拒答**：问题不在星环产品域，或向量相关性低于 `RAG_SCORE_THRESHOLD` 时，返回“知识库未命中”，不硬编答案。
 
+### Embedding 配置
+
+默认 `EMBEDDING_PROVIDER=auto`：
+
+- 配置了 `EMBEDDING_API_KEY` → 使用 OpenAI 兼容接口（默认 SiliconFlow `BAAI/bge-m3`）
+- 没有 Key → 自动回退 `HashingEmbeddings`，保证离线可跑
+
+切换到外部 Embedding：
+
+```powershell
+$env:EMBEDDING_PROVIDER = "openai"
+$env:EMBEDDING_MODEL = "BAAI/bge-m3"
+$env:EMBEDDING_BASE_URL = "https://api.siliconflow.cn/v1"
+$env:EMBEDDING_API_KEY = "sk-..."
+# 可选：$env:EMBEDDING_DIMENSIONS = "1024"
+```
+
+强制离线：
+
+```powershell
+$env:EMBEDDING_PROVIDER = "hashing"
+```
+
+说明：
+
+- 切换 Embedding 后，`.chroma` 会因 manifest 签名变化自动重建索引。
+- 当前仓库的 25/26 指标是 **HashingEmbeddings** 下测得的；外部 BGE-M3 未在本环境实际调用验证。
+- 配置后可先验证：
+
+```bash
+python scripts/check_embedding.py
+```
+
 ### 端到端
 
 ```bash
@@ -278,7 +316,7 @@ fieldops-copilot/
 ├─ fieldops/
 │  ├─ agent.py                  # create_agent + 模型选择
 │  ├─ mock_llm.py               # 无 API Key 时的确定性产品顾问模型
-│  ├─ rag.py                    # Chroma + 哈希 embedding + 混合检索 + 引用
+│  ├─ rag.py                    # Chroma + 混合检索 + Embedding 选择 + 引用
 │  ├─ retrieval.py              # BM25 + RRF 融合
 │  ├─ reranker.py               # 可选 cross-encoder 重排
 │  ├─ ingest.py                 # 语料统计与索引重建
