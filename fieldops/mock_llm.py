@@ -17,6 +17,19 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 PRODUCTS = ["ArgoDB", "TDH", "TDC", "Sophon", "StellarDB", "KunDB"]
 INDUSTRIES = ["金融", "银行", "政务", "能源", "制造", "交通", "运营商"]
 COMPAT_TERMS = ["国产化", "信创", "麒麟", "统信", "鲲鹏", "海光", "兼容"]
+WORKLOAD_TERMS = [
+    ("数据仓库", "数据仓库"),
+    ("实时分析", "实时分析"),
+    ("知识图谱", "知识图谱"),
+    ("机器学习", "机器学习"),
+    ("数据湖", "数据湖"),
+    ("报表", "报表"),
+    ("数仓", "数据仓库"),
+    ("oltp", "OLTP"),
+    ("交易", "交易"),
+    ("图", "图"),
+]
+SCALE_TERMS = ["gb", "tb", "pb", "数据量"]
 
 
 def _parse_json(content: Any) -> dict[str, Any]:
@@ -26,7 +39,11 @@ def _parse_json(content: Any) -> dict[str, Any]:
         return {}
     try:
         value = json.loads(content)
-        return value if isinstance(value, dict) else {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, list):
+            return {"items": value}
+        return {}
     except json.JSONDecodeError:
         return {}
 
@@ -41,6 +58,19 @@ def _find_industry(text: str) -> str:
         if industry in text:
             return "金融" if industry == "银行" else industry
     return ""
+
+
+def _find_workload(text: str) -> str:
+    lowered = text.lower()
+    for term, workload in WORKLOAD_TERMS:
+        if term in lowered:
+            return workload
+    return ""
+
+
+def _has_scale(text: str) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in SCALE_TERMS)
 
 
 class ProductAdvisorModel(BaseChatModel):
@@ -116,6 +146,8 @@ class ProductAdvisorModel(BaseChatModel):
         cases = self._latest(messages, "search_cases")
         compat = self._latest(messages, "check_compatibility")
         product_list = self._latest(messages, "list_products")
+        if isinstance(product_list, dict):
+            product_list = product_list.get("items", [])
         results = knowledge.get("results", []) if knowledge else []
         if knowledge.get("abstained"):
             return (
@@ -146,9 +178,33 @@ class ProductAdvisorModel(BaseChatModel):
 
         lines = []
         if product_list:
-            lines.append("### 星环产品线")
+            workload = _find_workload(query)
+            selected = {str(item.get("product", "")) for item in product_list}
+            results = [
+                item
+                for item in results
+                if not item.get("product")
+                or item.get("product") == "all"
+                or item.get("product") in selected
+            ]
+            if workload or len(product_list) <= 2:
+                lines.append("### 推荐方向")
+                if workload:
+                    lines.append(f"基于「{workload}」负载，优先看：")
+            else:
+                lines.append("### 星环产品线")
             for item in product_list[:8]:
                 lines.append(f"- **{item['product']}**：{item['one_liner']}")
+            if any(item["product"] == "ArgoDB" for item in product_list):
+                if "gb" in query.lower():
+                    lines.append(
+                        "\nGB 级数据量可以先从 ArgoDB 起步，"
+                        "不必上 TDH 这类平台级方案。"
+                    )
+                elif workload:
+                    lines.append(
+                        "\n如果后续需要数据湖、多模加工和大量组件，再评估 TDH。"
+                    )
         elif results:
             lines.append("### 相关资料")
             lines.append(str(results[0].get("snippet", ""))[:400])
@@ -242,36 +298,42 @@ class ProductAdvisorModel(BaseChatModel):
         tool_messages = self._tool_messages(messages)
         products = _find_products(query)
         industry = _find_industry(full_query)
+        workload = _find_workload(query)
         wants_compare = len(products) >= 2 or any(
             term in query for term in ["怎么选", "区别", "对比", "vs", "VS"]
         )
         wants_cases = any(term in query for term in ["案例", "客户", "同行业", "实践"])
         wants_compat = any(term in query for term in COMPAT_TERMS)
-        specific = bool(products) or any(
-            term in query
-            for term in [
-                "怎么选",
-                "区别",
-                "对比",
-                "案例",
-                "组合",
-                "国产化",
-                "兼容",
-                "报价",
-                "POC",
-                "试用",
-                "有哪些",
-                "产品线",
-                "HTAP",
-                "OLTP",
-                "数据湖",
-                "多租户",
-                "子产品",
-                "存储模型",
-                "关系查询",
-                "图数据库",
-                "迁移",
-            ]
+        specific = (
+            bool(products)
+            or bool(workload)
+            or _has_scale(query)
+            or any(
+                term in query
+                for term in [
+                    "怎么选",
+                    "区别",
+                    "对比",
+                    "案例",
+                    "组合",
+                    "国产化",
+                    "兼容",
+                    "报价",
+                    "POC",
+                    "试用",
+                    "有哪些",
+                    "产品线",
+                    "HTAP",
+                    "OLTP",
+                    "数据湖",
+                    "多租户",
+                    "子产品",
+                    "存储模型",
+                    "关系查询",
+                    "图数据库",
+                    "迁移",
+                ]
+            )
         )
 
         if not specific and not tool_messages:
@@ -312,7 +374,14 @@ class ProductAdvisorModel(BaseChatModel):
                 )
                 if call:
                     calls.append(call)
-            if not products and any(term in query for term in ["产品", "有哪些", "产品线"]):
+            if not products and workload:
+                args: dict[str, Any] = {"workload": workload}
+                if industry:
+                    args["industry"] = industry
+                call = self._call("list_products", args)
+                if call:
+                    calls.append(call)
+            elif not products and any(term in query for term in ["产品", "有哪些", "产品线"]):
                 call = self._call("list_products", {})
                 if call:
                     calls.append(call)

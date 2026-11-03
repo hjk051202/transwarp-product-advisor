@@ -81,6 +81,28 @@ def _extract(result: dict[str, Any]) -> tuple[str, list[Citation], list[ToolTrac
         if isinstance(message, AIMessage) and message.content:
             final = _content_text(message.content)
             break
+
+    selected_products: set[str] = set()
+    for trace in traces:
+        if trace.name != "list_products":
+            continue
+        payload = trace.result if isinstance(trace.result, dict) else {}
+        items = payload.get("result") or payload.get("items") or []
+        if isinstance(items, list):
+            selected_products = {
+                str(item.get("product", ""))
+                for item in items
+                if isinstance(item, dict) and item.get("product")
+            }
+
+    if selected_products:
+        citations = [
+            citation
+            for citation in citations
+            if citation.product in selected_products
+            or citation.product in {"", "all"}
+        ]
+
     return final, citations, traces
 
 
