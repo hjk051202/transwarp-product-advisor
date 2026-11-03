@@ -6,6 +6,28 @@ from fieldops.service import chat, get_history, list_history
 
 
 @pytest.mark.asyncio
+async def test_follow_up_uses_previous_turn() -> None:
+    first = await chat(
+        "我是一个银行的，搞报表，数据量GB，无国产要求",
+        session_id="SESS-follow-up",
+        company="某银行",
+        industry="金融",
+    )
+    second = await chat(
+        "我给了你了呀",
+        session_id="SESS-follow-up",
+        company="某银行",
+        industry="金融",
+        history=[
+            {"role": "user", "content": "我是一个银行的，搞报表，数据量GB，无国产要求"},
+            {"role": "assistant", "content": first.answer},
+        ],
+    )
+    assert "先确认需求" not in second.answer
+    assert "ArgoDB" in second.answer
+
+
+@pytest.mark.asyncio
 async def test_bank_reporting_answers_directly() -> None:
     response = await chat(
         "我是一个银行的，搞报表，数据量GB，无国产要求",

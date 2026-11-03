@@ -123,6 +123,14 @@ class ProductAdvisorModel(BaseChatModel):
         return ""
 
     @staticmethod
+    def _human_texts(messages: list[BaseMessage]) -> list[str]:
+        return [
+            str(message.content)
+            for message in messages
+            if isinstance(message, HumanMessage) and message.content
+        ]
+
+    @staticmethod
     def _clarify() -> str:
         return (
             "### 先确认需求\n"
@@ -294,22 +302,26 @@ class ProductAdvisorModel(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         full_query = self._text(messages)
-        query = full_query.split("\n\n")[0]
+        raw_texts = self._human_texts(messages)
+        user_texts = [text.split("\n\n")[0].strip() for text in raw_texts]
+        context_query = "\n".join(user_texts[-4:]) or full_query
         tool_messages = self._tool_messages(messages)
-        products = _find_products(query)
-        industry = _find_industry(full_query)
-        workload = _find_workload(query)
+        products = _find_products(context_query)
+        industry = _find_industry(context_query) or _find_industry(full_query)
+        workload = _find_workload(context_query)
         wants_compare = len(products) >= 2 or any(
-            term in query for term in ["怎么选", "区别", "对比", "vs", "VS"]
+            term in context_query for term in ["怎么选", "区别", "对比", "vs", "VS"]
         )
-        wants_cases = any(term in query for term in ["案例", "客户", "同行业", "实践"])
-        wants_compat = any(term in query for term in COMPAT_TERMS)
+        wants_cases = any(
+            term in context_query for term in ["案例", "客户", "同行业", "实践"]
+        )
+        wants_compat = any(term in context_query for term in COMPAT_TERMS)
         specific = (
             bool(products)
             or bool(workload)
-            or _has_scale(query)
+            or _has_scale(context_query)
             or any(
-                term in query
+                term in context_query
                 for term in [
                     "怎么选",
                     "区别",
@@ -345,7 +357,7 @@ class ProductAdvisorModel(BaseChatModel):
 
         if not tool_messages:
             calls = []
-            call = self._call("search_knowledge", {"query": query[:300]})
+            call = self._call("search_knowledge", {"query": context_query[:300]})
             if call:
                 calls.append(call)
             if wants_compare and len(products) >= 2:
@@ -358,16 +370,16 @@ class ProductAdvisorModel(BaseChatModel):
             if industry and wants_cases:
                 call = self._call(
                     "search_cases",
-                    {"industry": industry, "scenario": query[:100]},
+                    {"industry": industry, "scenario": context_query[:100]},
                 )
                 if call:
                     calls.append(call)
             if wants_compat:
-                os_name = "麒麟" if "麒麟" in query else (
-                    "统信" if "统信" in query else "麒麟"
+                os_name = "麒麟" if "麒麟" in context_query else (
+                    "统信" if "统信" in context_query else "麒麟"
                 )
-                cpu = "鲲鹏" if "鲲鹏" in query else (
-                    "海光" if "海光" in query else "x86"
+                cpu = "鲲鹏" if "鲲鹏" in context_query else (
+                    "海光" if "海光" in context_query else "x86"
                 )
                 call = self._call(
                     "check_compatibility", {"os_name": os_name, "cpu": cpu}
@@ -381,7 +393,7 @@ class ProductAdvisorModel(BaseChatModel):
                 call = self._call("list_products", args)
                 if call:
                     calls.append(call)
-            elif not products and any(term in query for term in ["产品", "有哪些", "产品线"]):
+            elif not products and any(term in context_query for term in ["产品", "有哪些", "产品线"]):
                 call = self._call("list_products", {})
                 if call:
                     calls.append(call)
@@ -395,7 +407,7 @@ class ProductAdvisorModel(BaseChatModel):
         return ChatResult(
             generations=[
                 ChatGeneration(
-                    message=AIMessage(content=self._final_answer(messages, query))
+                    message=AIMessage(content=self._final_answer(messages, context_query))
                 )
             ]
         )

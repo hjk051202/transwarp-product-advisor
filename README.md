@@ -25,10 +25,11 @@
 - **LangChain Agent**：`create_agent` 统一调度 RAG 和产品工具
 - **MCP**：`history-mcp` 暴露 `save_conversation` / `get_conversation` / `list_conversations`，Streamable HTTP 接入
 - **历史会话**：每次问答自动保存到 SQLite；Streamlit 有「历史会话」页面
+- **多轮上下文**：当前会话最近 8 条消息会传给 Agent，支持“我给了你了呀”这类追问；刷新页面不自动恢复上下文
 - **Streamlit 直连**：UI 直接调用 `fieldops.service`，没有 FastAPI、没有 HTTP API、没有 API Key
 - **审计日志**：内部记录 request_id、actor、action、resource、detail（当前没有单独的审计页面）
 - **适配层**：历史会话支持 `mcp / http / local`，产品目录支持 `json / http`
-- **测试**：14 个 pytest 用例通过
+- **测试**：15 个 pytest 用例通过
 - **评测**：
   - RAG：26 条问题，纯向量 Recall@4 = 20/26，混合检索 Recall@4 = 25/26
   - 端到端：20 条问题，citation/answer/history 均 20/20
@@ -304,7 +305,7 @@ history_saved   = 20/20 = 100.00%
 pytest -q
 ```
 
-当前：`14 passed`（启动 history MCP 时）；MCP 未启动时 `13 passed, 1 skipped`。
+当前：`15 passed`（启动 history MCP 时）；MCP 未启动时 `14 passed, 1 skipped`。
 
 ---
 
@@ -347,7 +348,7 @@ fieldops-copilot/
 │  ├─ run_eval.py
 │  ├─ compare_retrieval.py      # 纯向量 vs 混合检索
 │  └─ run_e2e.py
-├─ tests/                       # 14 个用例
+├─ tests/                       # 15 个用例
 ├─ requirements.txt
 ├─ run.ps1
 ├─ pytest.ini
@@ -375,7 +376,7 @@ fieldops-copilot/
 - 将 RAG 从纯向量升级为 **BM25 + 向量混合检索**，用 **RRF** 融合两路排名，并加入产品词/选型指南加权、领域拒答和可选 cross-encoder 重排；自建对比评测中 Recall@4 从 20/26 提升到 25/26。
 - 设计产品资料 RAG 链路，按章节切分并保留产品、版本、页码元数据；20 条端到端评测 citation/answer/history 均 20/20。
 - 将历史会话封装为 MCP Server，通过 `langchain-mcp-adapters` 以 Streamable HTTP 暴露保存/查询会话；抽象 `mcp/http/local` 三种历史适配器。
-- 使用 Streamlit 实现单进程本地 Demo，支持产品选型、引用来源、工具调用轨迹和历史会话回看；14 个 pytest 用例覆盖 RAG、工具、MCP 与适配器。
+- 使用 Streamlit 实现单进程本地 Demo，支持产品选型、引用来源、工具调用轨迹、当前会话多轮上下文和历史会话回看；15 个 pytest 用例覆盖 RAG、工具、MCP 与适配器。
 
 > 指标请写你实测的数字；当前评测是小样本合成集，面试时主动说明语料规模和 mock 模型限制。
 

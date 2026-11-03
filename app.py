@@ -198,6 +198,12 @@ def render_chat() -> None:
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    history_payload = [
+        {"role": item["role"], "content": item["content"]}
+        for item in st.session_state.messages[1:-1][-8:]
+        if item.get("role") in {"user", "assistant"}
+    ]
+
     try:
         data = run(
             service_chat(
@@ -205,6 +211,7 @@ def render_chat() -> None:
                 session_id=st.session_state.session_id,
                 company=company,
                 industry=industry,
+                history=history_payload,
             )
         )
     except Exception as exc:

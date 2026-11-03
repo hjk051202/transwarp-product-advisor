@@ -146,6 +146,7 @@ async def chat(
     session_id: str | None = None,
     company: str | None = None,
     industry: str | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> ChatResponse:
     session_id = session_id or f"SESS-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
     prompt = (
@@ -153,10 +154,23 @@ async def chat(
         f"客户公司：{company or '未提供'}\n"
         f"行业：{industry or '未提供'}"
     )
+    previous_messages = []
+    for item in (history or [])[-8:]:
+        role = item.get("role")
+        content = str(item.get("content", ""))[:1500]
+        if not content:
+            continue
+        if role == "user":
+            previous_messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            previous_messages.append(AIMessage(content=content))
+
     error = ""
     try:
         agent, mode = await get_agent()
-        result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
+        result = await agent.ainvoke(
+            {"messages": [*previous_messages, HumanMessage(content=prompt)]}
+        )
         answer, citations, traces = _extract(result)
         if not answer:
             answer, citations, traces = _fallback_advice(message, industry or "")
