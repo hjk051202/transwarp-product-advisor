@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
-from datetime import datetime
+from datetime import datetime, timezone
+from urllib.parse import quote
 from uuid import uuid4
 
 import streamlit as st
@@ -292,6 +294,37 @@ st.markdown(
     .history-question { color: #0f172a; }
     .history-time { color: #64748b; }
     .history-session { color: #94a3b8; }
+    .history-list {
+        max-height: 330px;
+        overflow-y: auto;
+        padding-right: 2px;
+    }
+    .history-row {
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        padding: .36rem .45rem;
+        border-radius: 8px;
+        color: #334155 !important;
+        text-decoration: none !important;
+        font-size: .76rem;
+        line-height: 1.25;
+        margin-bottom: .08rem;
+    }
+    .history-row:hover { background: #f1f5f9; }
+    .history-row.active { background: #e2e8f0; color: #0f172a !important; }
+    .history-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .history-row .history-time {
+        color: #94a3b8;
+        font-size: .64rem;
+        white-space: nowrap;
+    }
     div[data-testid="stMetric"] {
         background: #ffffff !important;
         border: 1px solid #e2e8f0 !important;
@@ -534,6 +567,47 @@ def load_history_sessions(limit: int = 40) -> list[dict]:
     return sessions
 
 
+def relative_time(value: str) -> str:
+    try:
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    seconds = max(0, int((datetime.now(timezone.utc) - moment).total_seconds()))
+    minutes = seconds // 60
+    if minutes < 1:
+        return "刚刚"
+    if minutes < 60:
+        return f"{minutes}分钟"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}小时"
+    days = hours // 24
+    if days < 30:
+        return f"{days}天"
+    return moment.astimezone().strftime("%m-%d")
+
+
+def apply_session(session: dict) -> None:
+    messages = []
+    for row in session["rows"]:
+        messages.append({"role": "user", "content": row.get("user_message", "")})
+        messages.append(
+            {
+                "role": "assistant",
+                "content": row.get("assistant_message", ""),
+                "citations": row.get("citations") or [],
+                "tools": row.get("tool_trace") or [],
+                "mode": row.get("mode", ""),
+            }
+        )
+    st.session_state.session_id = session["session_id"]
+    st.session_state.messages = messages
+    st.session_state.pending_prompt = None
+    st.session_state.page = "工作台"
+
+
 def render_stack() -> None:
     if st.button("← 返回工作台", key="back-workbench"):
         st.session_state.page = "工作台"
@@ -620,6 +694,7 @@ def render_sidebar() -> tuple[str, str, str]:
             st.session_state.messages = []
             st.session_state.pending_prompt = None
             st.session_state.page = "工作台"
+            st.query_params.clear()
             st.rerun()
 
         st.markdown('<div class="side-section">会话参数</div>', unsafe_allow_html=True)
@@ -632,42 +707,34 @@ def render_sidebar() -> tuple[str, str, str]:
 
         st.markdown('<div class="side-section">历史会话</div>', unsafe_allow_html=True)
         sessions = load_history_sessions(limit=40)
+        selected = st.query_params.get("session_id")
+        if selected:
+            target = next(
+                (item for item in sessions if item["session_id"] == selected),
+                None,
+            )
+            if target is not None and selected != st.session_state.session_id:
+                apply_session(target)
+
         if not sessions:
             st.caption("暂无历史会话")
         else:
-            st.caption(f"最近 {min(len(sessions), 12)} 个会话")
+            rows = []
             for session in sessions[:12]:
                 active = session["session_id"] == st.session_state.session_id
-                title = str(session["title"]).replace("\n", " ")[:24]
-                label = f"{'● ' if active else ''}{title}"
-                updated = str(session["updated"])[:16].replace("T", " ")
-                if st.button(
-                    label,
-                    key=f"history-{session['session_id']}",
-                    use_container_width=True,
-                    type="primary" if active else "secondary",
-                    help=f"{updated} · {session['count']} 轮问答",
-                    disabled=active,
-                ):
-                    messages = []
-                    for row in session["rows"]:
-                        messages.append(
-                            {"role": "user", "content": row.get("user_message", "")}
-                        )
-                        messages.append(
-                            {
-                                "role": "assistant",
-                                "content": row.get("assistant_message", ""),
-                                "citations": row.get("citations") or [],
-                                "tools": row.get("tool_trace") or [],
-                                "mode": row.get("mode", ""),
-                            }
-                        )
-                    st.session_state.session_id = session["session_id"]
-                    st.session_state.messages = messages
-                    st.session_state.pending_prompt = None
-                    st.session_state.page = "工作台"
-                    st.rerun()
+                title = html.escape(str(session["title"]).replace("\n", " "))
+                href = f"?session_id={quote(str(session['session_id']))}"
+                rows.append(
+                    f'<a class="history-row{" active" if active else ""}" '
+                    f'href="{href}" title="{title}">'
+                    f'<span class="history-title">{title}</span>'
+                    f'<span class="history-time">{relative_time(str(session["updated"]))}</span>'
+                    f"</a>"
+                )
+            st.markdown(
+                '<div class="history-list">' + "".join(rows) + "</div>",
+                unsafe_allow_html=True,
+            )
 
         st.markdown(
             f"""
