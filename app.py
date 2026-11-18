@@ -320,6 +320,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = None
+if "page" not in st.session_state:
+    st.session_state.page = "工作台"
 
 
 def queue_prompt(text: str) -> None:
@@ -500,62 +502,42 @@ def render_chat() -> None:
         st.caption(f"已保存 · {payload['conversation_id']}")
 
 
-def render_history() -> None:
-    st.markdown('<div class="page-title">历史会话</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="page-sub">每次问答自动保存到 SQLite；可回看回答、引用和工具轨迹。</div>',
-        unsafe_allow_html=True,
-    )
-    query = st.text_input(
-        "搜索历史",
-        placeholder="按客户问题搜索…",
-        label_visibility="collapsed",
-    )
+def load_history_sessions(limit: int = 40) -> list[dict]:
     try:
-        items = run(list_history(limit=40))
-    except Exception as exc:
-        st.error(f"读取历史失败：{exc}")
-        return
+        items = run(list_history(limit=limit))
+    except Exception:
+        return []
 
-    if query:
-        needle = query.lower()
-        items = [
-            item
-            for item in items
-            if needle
-            in (item.get("user_message", "") + item.get("assistant_message", "")).lower()
-        ]
-
-    st.caption(f"共 {len(items)} 条")
-    if not items:
-        st.info("还没有历史会话。")
-        return
-
+    grouped: dict[str, list[dict]] = {}
     for item in items:
-        with st.container(border=True):
-            left, right = st.columns([4, 1])
-            with left:
-                st.markdown(
-                    f'<div class="history-question">{item.get("user_message", "")[:120]}</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    f'<div class="history-session">SESSION · {item.get("session_id", "")}</div>',
-                    unsafe_allow_html=True,
-                )
-            with right:
-                created = str(item.get("created_at", ""))[:16].replace("T", " ")
-                st.markdown(
-                    f'<div class="history-time">{created}</div>',
-                    unsafe_allow_html=True,
-                )
-            with st.expander("查看回答与引用", expanded=False):
-                render_answer(item.get("assistant_message", ""))
-                render_citations(item.get("citations") or [])
-                render_tools(item.get("tool_trace") or [])
+        session_id = str(item.get("session_id", ""))
+        if session_id:
+            grouped.setdefault(session_id, []).append(item)
+
+    sessions = []
+    for session_id, rows in grouped.items():
+        ordered = sorted(rows, key=lambda item: str(item.get("created_at", "")))
+        first = next(
+            (row for row in ordered if row.get("user_message")),
+            ordered[0],
+        )
+        sessions.append(
+            {
+                "session_id": session_id,
+                "title": first.get("user_message", "未命名会话"),
+                "updated": str(ordered[-1].get("created_at", "")),
+                "count": len(ordered),
+                "rows": ordered,
+            }
+        )
+    sessions.sort(key=lambda item: item["updated"], reverse=True)
+    return sessions
 
 
 def render_stack() -> None:
+    if st.button("← 返回工作台", key="back-workbench"):
+        st.session_state.page = "工作台"
+        st.rerun()
     st.markdown('<div class="page-title">技术栈</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="page-sub">一个本地优先的产品选型 Agent：RAG、Tool Calling、MCP 和可回看的会话。</div>',
@@ -637,13 +619,8 @@ def render_sidebar() -> tuple[str, str, str]:
             st.session_state.session_id = new_session_id()
             st.session_state.messages = []
             st.session_state.pending_prompt = None
+            st.session_state.page = "工作台"
             st.rerun()
-
-        page = st.radio(
-            "导航",
-            ["工作台", "历史会话", "技术栈"],
-            label_visibility="collapsed",
-        )
 
         st.markdown('<div class="side-section">会话参数</div>', unsafe_allow_html=True)
         company = st.text_input("客户公司", value="某城商行")
@@ -652,6 +629,45 @@ def render_sidebar() -> tuple[str, str, str]:
             ["金融", "政务", "能源", "制造", "交通", "运营商", "其他"],
             index=0,
         )
+
+        st.markdown('<div class="side-section">历史会话</div>', unsafe_allow_html=True)
+        sessions = load_history_sessions(limit=40)
+        if not sessions:
+            st.caption("暂无历史会话")
+        else:
+            st.caption(f"最近 {min(len(sessions), 12)} 个会话")
+            for session in sessions[:12]:
+                active = session["session_id"] == st.session_state.session_id
+                title = str(session["title"]).replace("\n", " ")[:24]
+                label = f"{'● ' if active else ''}{title}"
+                updated = str(session["updated"])[:16].replace("T", " ")
+                if st.button(
+                    label,
+                    key=f"history-{session['session_id']}",
+                    use_container_width=True,
+                    type="primary" if active else "secondary",
+                    help=f"{updated} · {session['count']} 轮问答",
+                    disabled=active,
+                ):
+                    messages = []
+                    for row in session["rows"]:
+                        messages.append(
+                            {"role": "user", "content": row.get("user_message", "")}
+                        )
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": row.get("assistant_message", ""),
+                                "citations": row.get("citations") or [],
+                                "tools": row.get("tool_trace") or [],
+                                "mode": row.get("mode", ""),
+                            }
+                        )
+                    st.session_state.session_id = session["session_id"]
+                    st.session_state.messages = messages
+                    st.session_state.pending_prompt = None
+                    st.session_state.page = "工作台"
+                    st.rerun()
 
         st.markdown(
             f"""
@@ -662,13 +678,18 @@ def render_sidebar() -> tuple[str, str, str]:
             """,
             unsafe_allow_html=True,
         )
-    return page, company, industry
+        if st.button("技术栈", key="nav-stack", use_container_width=True):
+            st.session_state.page = "技术栈"
+            st.rerun()
+    return st.session_state.page, company, industry
 
 
 page, company, industry = render_sidebar()
 render_topbar(page)
 
-if page == "工作台":
+if page == "技术栈":
+    render_stack()
+else:
     st.markdown(
         """
         <div class="workspace-head">
@@ -680,7 +701,3 @@ if page == "工作台":
         unsafe_allow_html=True,
     )
     render_chat()
-elif page == "历史会话":
-    render_history()
-else:
-    render_stack()
