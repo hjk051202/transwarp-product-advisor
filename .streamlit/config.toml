@@ -2,8 +2,8 @@
 toolbarMode = "viewer"
 
 [theme]
-base = "dark"
-primaryColor = "#6EA8FE"
-backgroundColor = "#090D14"
-secondaryBackgroundColor = "#0F1624"
-textColor = "#E7EDF7"
+base = "light"
+primaryColor = "#0F766E"
+backgroundColor = "#F4F7FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"

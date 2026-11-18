@@ -32,24 +32,24 @@ st.markdown(
     """
     <style>
     :root {
-        --bg: #090d14;
-        --panel: #0f1624;
-        --panel-2: #121c2d;
-        --line: #223047;
-        --line-soft: #1a2638;
-        --text: #e7edf7;
-        --muted: #8c9bb2;
-        --accent: #6ea8fe;
-        --accent-2: #4dd4c6;
-        --ok: #34d399;
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --panel-2: #f8fafc;
+        --line: #d9e3f0;
+        --line-soft: #e6edf6;
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0f766e;
+        --accent-2: #0f766e;
+        --ok: #059669;
     }
     html, body, [class*="css"] {
         font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
     .stApp {
         background:
-            radial-gradient(900px 420px at 18% -8%, rgba(40, 83, 145, .22), transparent 60%),
-            radial-gradient(760px 380px at 100% 0%, rgba(24, 120, 120, .12), transparent 55%),
+            radial-gradient(900px 420px at 18% -8%, rgba(37, 99, 235, .07), transparent 60%),
+            radial-gradient(760px 380px at 100% 0%, rgba(13, 148, 136, .06), transparent 55%),
             var(--bg);
         color: var(--text);
     }
@@ -58,13 +58,19 @@ st.markdown(
         padding-top: 1.1rem;
         padding-bottom: 2.5rem;
     }
-    header[data-testid="stHeader"],
-    [data-testid="stToolbar"],
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+    }
     [data-testid="stDecoration"],
     #MainMenu { display: none !important; }
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        visibility: visible !important;
+    }
 
     section[data-testid="stSidebar"] {
-        background: #0b111c;
+        background: #ffffff;
         border-right: 1px solid var(--line-soft);
     }
     section[data-testid="stSidebar"] > div {
@@ -249,6 +255,59 @@ st.markdown(
         border: 1px solid var(--line-soft);
         border-radius: 10px;
         background: rgba(10, 16, 26, .55);
+    }
+
+    /* Light workspace overrides */
+    .crumb .sep { color: #94a3b8; }
+    .version { color: #64748b; }
+    .empty-state {
+        background: linear-gradient(135deg, #ffffff, #f8fafc) !important;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .04);
+    }
+    .sample-label { color: #64748b; }
+    .brand-mark { color: #ffffff; background: linear-gradient(135deg, #0f766e, #2563eb); }
+    .side-sub { color: #64748b; }
+    .side-section { color: #64748b; }
+    .side-status {
+        background: #f8fafc !important;
+        color: #475569 !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .03);
+    }
+    .side-status-sub { color: #94a3b8; }
+    [data-testid="stChatMessage"] {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
+    }
+    [data-testid="stChatMessage"] h3 { color: #0f172a !important; }
+    [data-testid="stChatMessage"] code {
+        color: #0f766e !important;
+        background: rgba(15, 118, 110, .08) !important;
+    }
+    .msg-label { color: #64748b; }
+    .citation-item { border-left-color: #0f766e; }
+    .citation-title { color: #0f172a; }
+    .citation-meta { color: #64748b; }
+    .citation-snippet { color: #475569; }
+    .history-question { color: #0f172a; }
+    .history-time { color: #64748b; }
+    .history-session { color: #94a3b8; }
+    div[data-testid="stMetric"] {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .03);
+    }
+    div[data-testid="stMetricValue"] { color: #0f172a !important; }
+    .stCaption, [data-testid="stCaptionContainer"] { color: #64748b !important; }
+    div[data-testid="stExpander"] {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="collapsedControl"] button {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #0f172a !important;
     }
     </style>
     """,
