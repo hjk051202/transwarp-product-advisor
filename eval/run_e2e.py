@@ -15,10 +15,12 @@ if str(ROOT) not in sys.path:
 from fieldops.service import chat
 
 QUESTIONS = Path(__file__).resolve().parent / "e2e_questions.jsonl"
+            #转为path对象 转为绝对路径 取父路径下的e2e_questions.jsonl文件
+# 最终得到Path("D:/.../recovered/eval/e2e_questions.jsonl")这一绝对路径
 
 
 async def main() -> None:
-    rows = [
+    rows = [          # 按行拆，跳空行，变dict
         json.loads(line)
         for line in QUESTIONS.read_text(encoding="utf-8").splitlines()
         if line.strip()
@@ -29,7 +31,7 @@ async def main() -> None:
     latencies: list[float] = []
 
     for row in rows:
-        start = time.perf_counter()
+        start = time.perf_counter() #计时
         response = await chat(
             row["question"],
             session_id=f"SESS-eval-{row['id']}",
@@ -39,13 +41,13 @@ async def main() -> None:
         elapsed = (time.perf_counter() - start) * 1000
         latencies.append(elapsed)
 
-        cited = {item.doc_id for item in response.citations}
+        cited = {item.doc_id for item in response.citations}  # 检查引用，关键词，保存对话
         expected_doc = row.get("expected_doc")
         citation_hit = expected_doc is None or expected_doc in cited
         answer_hit = any(keyword in response.answer for keyword in row.get("keywords", []))
         history_hit = response.conversation_id.startswith("CONV-")
 
-        citation_hits += int(citation_hit)
+        citation_hits += int(citation_hit)   #统计引用，关键词引用，历史记录保存，延迟
         answer_hits += int(answer_hit)
         history_hits += int(history_hit)
         print(
