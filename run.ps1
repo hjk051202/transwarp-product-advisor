@@ -12,9 +12,7 @@ if (-not (Test-Path $python)) {    #虚拟环境不存在就创建
 
 Write-Host "Starting history-mcp on http://127.0.0.1:8765 ..." #启动 history-mcp
 $env:MCP_TRANSPORT = "streamable-http" #设置MCP传输方式
-$mcp = Start-Process -FilePath $python ` #启动MCP Server
-    -ArgumentList "-m", "mcp_server.history_server" `
-    -WorkingDirectory $root -PassThru -WindowStyle Hidden
+$mcp = Start-Process -FilePath $python -ArgumentList "-m", "mcp_server.history_server" -WorkingDirectory $root -PassThru -WindowStyle Hidden
 
 Start-Sleep -Seconds 2
 
