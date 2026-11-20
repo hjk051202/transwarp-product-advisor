@@ -35,17 +35,17 @@ _mode: str = "offline"
 def build_model() -> tuple[Any, str]:
     if DEEPSEEK_API_KEY:
         return (
-            ChatOpenAI(
-                model=DEEPSEEK_MODEL,
+            ChatOpenAI(        # 这是model，也是build_agent后的agent里的model
+                model=DEEPSEEK_MODEL, #这个model是模型名
                 api_key=DEEPSEEK_API_KEY,
                 base_url=DEEPSEEK_BASE_URL,
                 temperature=0,
             ),
-            "deepseek",
+            "deepseek",     #这是mode
         )
     if OPENAI_API_KEY:
         return (
-            ChatOpenAI(
+            ChatOpenAI(   
                 model=OPENAI_MODEL,
                 api_key=OPENAI_API_KEY,
                 temperature=0,
@@ -61,14 +61,9 @@ async def build_agent() -> tuple[Any, str]:
     return agent, mode
 
 
-async def get_agent() -> tuple[Any, str]:
+async def get_agent() -> tuple[Any, str]: # 调用方，为保持统一这几个函数都async，但是其实没有在等I/O
     global _agent, _mode
     if _agent is None:
         _agent, _mode = await build_agent()
     return _agent, _mode
 
-
-def reset_agent() -> None:
-    global _agent, _mode
-    _agent = None
-    _mode = "offline"
