@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from fieldops.config import DEEPSEEK_API_KEY, OPENAI_API_KEY
 from fieldops.service import chat as service_chat
 from fieldops.service import list_history
 
@@ -112,6 +113,10 @@ st.markdown(
         width: 7px; height: 7px; border-radius: 50%;
         background: var(--ok); box-shadow: 0 0 10px rgba(52, 211, 153, .7);
     }
+    .live-dot.offline {
+        background: #f59e0b;
+        box-shadow: 0 0 10px rgba(245, 158, 11, .55);
+    }
     .version {
         border: 1px solid var(--line);
         color: #9fb1c9;
@@ -200,6 +205,9 @@ st.markdown(
     .side-status .dot {
         display: inline-block; width: 6px; height: 6px; border-radius: 50%;
         background: var(--ok); margin-right: .4rem;
+    }
+    .side-status .dot.offline {
+        background: #f59e0b;
     }
     .side-status-sub { color: #5f7087; font-size: .65rem; margin-top: .3rem; }
 
@@ -370,19 +378,36 @@ def mode_label(mode: str) -> str:
     }.get(mode, mode or "本地")
 
 
+def configured_mode() -> str:
+    if DEEPSEEK_API_KEY:
+        return "deepseek"
+    if OPENAI_API_KEY:
+        return "openai"
+    return "offline-mock"
+
+
+def runtime_label() -> str:
+    mode = configured_mode()
+    if mode == "offline-mock":
+        return "本地演示"
+    return f"{mode_label(mode)} · 本地部署"
+
+
 def render_topbar(page: str) -> None:
     crumbs = {
         "工作台": "选型咨询",
         "历史会话": "历史会话",
         "技术栈": "技术栈",
     }
+    mode = configured_mode()
+    dot_class = "live-dot offline" if mode == "offline-mock" else "live-dot"
     st.markdown(
         f"""
         <div class="topbar">
           <div class="crumb">星环产品选型助手 <span class="sep">/</span>
             <b>{crumbs.get(page, page)}</b></div>
           <div class="top-meta">
-            <span class="live-dot"></span> 本地运行
+            <span class="{dot_class}"></span> {runtime_label()}
             <span class="version">v1.0</span>
           </div>
         </div>
@@ -739,7 +764,8 @@ def render_sidebar() -> tuple[str, str, str]:
         st.markdown(
             f"""
             <div class="side-status">
-              <span class="dot"></span> 本地运行
+              <span class="dot{' offline' if configured_mode() == 'offline-mock' else ''}"></span>
+              {runtime_label()}
               <div class="side-status-sub">SESSION · {st.session_state.session_id}</div>
             </div>
             """,
