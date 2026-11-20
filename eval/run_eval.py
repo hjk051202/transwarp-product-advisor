@@ -25,9 +25,9 @@ def main() -> None:
     page_hits = 0
     for row in rows:
         docs = search(row["question"], k=4)
-        doc_ids = [doc.doc_id for doc in docs]
+        doc_ids = [doc.doc_id for doc in docs]  # 检索top-4的文档id并判断是否命中
         hit = row["expected_doc"] in doc_ids
-        page_hit = any(
+        page_hit = any(                         #判断页码命中
             doc.doc_id == row["expected_doc"] and doc.page == row.get("expected_page")
             for doc in docs
         )
