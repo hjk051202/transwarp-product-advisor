@@ -17,7 +17,7 @@ from fieldops.rag import search
 from fieldops.schemas import ChatResponse, Citation, ToolTrace
 
 
-def _content_text(content: Any) -> str:
+def _content_text(content: Any) -> str: # 消息转字符串
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -31,7 +31,7 @@ def _content_text(content: Any) -> str:
     return str(content)
 
 
-def _payload(message: ToolMessage) -> dict[str, Any]:
+def _payload(message: ToolMessage) -> dict[str, Any]:   # 解析toolmessage里的json
     content = _content_text(message.content)
     try:
         value = json.loads(content)
@@ -41,7 +41,7 @@ def _payload(message: ToolMessage) -> dict[str, Any]:
 
 
 def _extract(result: dict[str, Any]) -> tuple[str, list[Citation], list[ToolTrace]]:
-    messages = result.get("messages", [])
+    messages = result.get("messages", [])    # 从agent结果中提取回答，引用，工具轨迹
     citations: list[Citation] = []
     traces: list[ToolTrace] = []
     call_args: dict[str, dict[str, Any]] = {}
@@ -56,7 +56,7 @@ def _extract(result: dict[str, Any]) -> tuple[str, list[Citation], list[ToolTrac
             continue
         payload = _payload(message)
         traces.append(
-            ToolTrace(
+            ToolTrace(          # 生成工具轨迹
                 name=message.name or "unknown",
                 args=call_args.get(message.tool_call_id or "", {}),
                 result=payload,
@@ -149,39 +149,39 @@ async def chat(
     history: list[dict[str, str]] | None = None,
 ) -> ChatResponse:
     session_id = session_id or f"SESS-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:4]}"
-    prompt = (
+    prompt = (                                                        # 生成prompt
         f"{message}\n\n"
         f"客户公司：{company or '未提供'}\n"
         f"行业：{industry or '未提供'}"
     )
     previous_messages = []
-    for item in (history or [])[-8:]:
+    for item in (history or [])[-8:]:                                  # 控制上下文长度8条
         role = item.get("role")
         content = str(item.get("content", ""))[:1500]
         if not content:
             continue
-        if role == "user":
-            previous_messages.append(HumanMessage(content=content))
+        if role == "user":                                        # 只接受user/assistant消息
+            previous_messages.append(HumanMessage(content=content))  # 转换为langchain消息
         elif role == "assistant":
             previous_messages.append(AIMessage(content=content))
 
     error = ""
     try:
-        agent, mode = await get_agent()
-        result = await agent.ainvoke(
+        agent, mode = await get_agent()                         # 调用agent
+        result = await agent.ainvoke(                           # 真正的回答
             {"messages": [*previous_messages, HumanMessage(content=prompt)]}
         )
         answer, citations, traces = _extract(result)
-        if not answer:
+        if not answer:                                          #空回答时的兜底回答
             answer, citations, traces = _fallback_advice(message, industry or "")
             mode = "offline-fallback"
-    except Exception as exc:
+    except Exception as exc:                                    # 调用失败时的兜底
         error = f"{type(exc).__name__}: {exc}"
         answer, citations, traces = _fallback_advice(message, industry or "")
         mode = "offline-fallback"
 
     conversation_id = ""
-    try:
+    try:                                # 保存历史，包括会话编号，当前问题，当前回答，引用，工具轨迹
         saved = await build_history_adapter().save_conversation(
             {
                 "session_id": session_id,
@@ -196,7 +196,7 @@ async def chat(
     except Exception as exc:
         error = f"{error}; history_save: {type(exc).__name__}: {exc}".strip("; ")
 
-    audit.log(
+    audit.log(                               # 写到sqlite里的审计日志，记录模式、工具、引用数量、错误和会话 ID，方便排查失败请求
         "chat.request",
         resource=f"session:{session_id}",
         detail={
@@ -209,7 +209,7 @@ async def chat(
             "error": error,
         },
     )
-    return ChatResponse(
+    return ChatResponse(                          # 返回结果，包括回答，引用，工具轨迹，对话编号
         answer=answer,
         citations=citations,
         tool_trace=traces,
